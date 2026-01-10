@@ -3,6 +3,13 @@ import { NextRequest } from "next/server";
 
 const PLACEHOLDER_TRANSCRIPT =
   "Temp response: [PAUSE] umm I think that [FILLER] the key to success is uh hard work and dedication [PAUSE] you know like setting goals and staying focused [FILLER] yeah.";
+const PLACEHOLDER_TECHNICAL = {
+  technical_score: 81,
+  technical_feedback: [
+    "Covers the core concept but skips one important detail.",
+    "Correct direction overall; tighten the explanation of the key mechanism.",
+  ],
+};
 const TRANSCRIBE_MODE =
   process.env.TRANSCRIBE_MODE ?? "gemini"; // "gemini" or "placeholder"
 
@@ -19,6 +26,10 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/${GEMINI_API_VERSI
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const file = formData.get("file");
+  const question =
+    typeof formData.get("question") === "string"
+      ? String(formData.get("question"))
+      : "Unknown question";
 
   if (!(file instanceof File)) {
     return Response.json(
@@ -29,7 +40,11 @@ export async function POST(request: NextRequest) {
 
   if (TRANSCRIBE_MODE === "placeholder") {
     void file;
-    return Response.json({ text: PLACEHOLDER_TRANSCRIPT });
+    return Response.json({
+      transcript: PLACEHOLDER_TRANSCRIPT,
+      technical: PLACEHOLDER_TECHNICAL,
+      raw: "placeholder",
+    });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -43,6 +58,37 @@ export async function POST(request: NextRequest) {
   const arrayBuffer = await file.arrayBuffer();
   const base64Audio = Buffer.from(arrayBuffer).toString("base64");
   const mimeType = file.type || "audio/webm";
+  const prompt = `You are analyzing a candidate's interview response for technical correctness.
+
+The interview question asked is:
+"${question}"
+
+First, transcribe the audio exactly. Show a large pause with [PAUSE], and filler words (like, uhh, umm, ehh, uhh, etc.) [FILLER].
+
+Then, based on the response, evaluate:
+
+1) Technical correctness: how well did the candidate answer the question conceptually? Ignore delivery, confidence, or nervousness.
+- Score from 0 to 10 (NO DECIMALS)
+- Give exactly TWO concise feedback points focusing on the key concepts.
+
+Return ONLY a JSON object in this format:
+
+{
+  "transcript": "string",
+  "technical_score": integer,
+  "technical_feedback": [
+    "string",
+    "string"
+  ]
+}
+
+Strict rules:
+- Output must be valid JSON with double quotes.
+- Do not wrap in code fences.
+- Do not add any extra text before or after the JSON.
+- Escape any quotes inside the transcript string.
+
+Be objective, concise, and professional. Do not include any text outside of the JSON.`;
 
   const upstreamResponse = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
     method: "POST",
@@ -55,7 +101,7 @@ export async function POST(request: NextRequest) {
           role: "user",
           parts: [
             {
-              text: "Transcribe the audio. Show a large pause with [PAUSE], and filler words (like, uhh, umm, ehh, uhh, etc.) [FILLER]. Return only the transcript text.",
+              text: prompt,
             },
             {
               inlineData: {
@@ -82,18 +128,74 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: message }, { status: upstreamResponse.status });
   }
 
-  const transcript =
+  const modelText =
     payload?.candidates?.[0]?.content?.parts
       ?.map((part: { text?: string }) => part.text ?? "")
       .join("")
       .trim() ?? "";
 
-  if (!transcript) {
+  if (!modelText) {
     return Response.json(
-      { error: "No transcript returned from Gemini." },
+      { error: "No response returned from Gemini." },
       { status: 502 },
     );
   }
 
-  return Response.json({ text: transcript });
+  const extractJsonBlock = (text: string) => {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return text.slice(start, end + 1);
+    }
+    return "";
+  };
+
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(modelText);
+  } catch {
+    const extracted = extractJsonBlock(modelText);
+    if (extracted) {
+      try {
+        parsed = JSON.parse(extracted);
+      } catch {
+        parsed = null;
+      }
+    }
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    console.error("Gemini response was not valid JSON:", modelText);
+    return Response.json(
+      { error: "Gemini response was not valid JSON.", raw: modelText },
+      { status: 502 },
+    );
+  }
+
+  const record = parsed as Record<string, unknown>;
+  const transcript =
+    typeof record.transcript === "string" ? record.transcript : "";
+  const technical_score =
+    typeof record.technical_score === "number"
+      ? record.technical_score
+      : null;
+  const technical_feedback = Array.isArray(record.technical_feedback)
+    ? record.technical_feedback.map((item) => String(item))
+    : null;
+
+  if (!transcript || technical_score === null || !technical_feedback) {
+    return Response.json(
+      { error: "Gemini response missing required fields.", raw: modelText },
+      { status: 502 },
+    );
+  }
+
+  return Response.json({
+    transcript,
+    technical: {
+      technical_score,
+      technical_feedback,
+    },
+    raw: modelText,
+  });
 }

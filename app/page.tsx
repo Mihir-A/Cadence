@@ -289,13 +289,14 @@ export default function Home() {
     setFeedbackError(null);
     setTechnicalError(null);
     setTranscribeStatus("loading");
-    setTechnicalStatus("idle");
+    setTechnicalStatus("loading");
     setFeedbackStatus("loading");
 
     try {
       const file = recordedBlobRef.current;
       const transcribeForm = new FormData();
       transcribeForm.append("file", file, "interview-practice.webm");
+      transcribeForm.append("question", currentQuestion);
       const feedbackForm = new FormData();
       feedbackForm.append("file", file, "interview-practice.webm");
 
@@ -319,17 +320,29 @@ export default function Home() {
       let technicalOk = false;
       let feedbackOk = false;
       let transcript = "";
+      let transcribeResult: Record<string, unknown> | null = null;
       try {
-        const transcribeResult = await fetch("/api/transcribe", {
+        transcribeResult = await fetch("/api/transcribe", {
           method: "POST",
           body: transcribeForm,
         }).then(parseResponse);
         transcript =
-          typeof transcribeResult?.text === "string"
-            ? transcribeResult.text
+          typeof transcribeResult?.transcript === "string"
+            ? transcribeResult.transcript
             : "No transcript returned.";
         if (typeof window !== "undefined") {
           window.sessionStorage.setItem("latestTranscript", transcript);
+          if (typeof transcribeResult?.raw === "string") {
+            window.sessionStorage.setItem(
+              "latestGeminiRaw",
+              transcribeResult.raw,
+            );
+          } else {
+            window.sessionStorage.setItem(
+              "latestGeminiRaw",
+              JSON.stringify(transcribeResult ?? {}, null, 2),
+            );
+          }
         }
         transcriptOk = true;
         setTranscribeStatus("success");
@@ -340,23 +353,21 @@ export default function Home() {
             : "Transcription failed. Please try again.";
         setTranscriptError(message);
         setTranscribeStatus("error");
+        setTechnicalStatus("error");
       }
 
       if (transcriptOk) {
-        try {
-          setTechnicalStatus("loading");
-          const technicalResult = await fetch("/api/technical", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              question: currentQuestion,
-              transcript,
-            }),
-          }).then(parseResponse);
-          const technicalPayload =
-            technicalResult?.technical ?? technicalResult;
+        const technicalPayload =
+          typeof transcribeResult?.technical === "object" &&
+          transcribeResult.technical !== null
+            ? transcribeResult.technical
+            : typeof transcribeResult?.technical_score === "number"
+              ? {
+                  technical_score: transcribeResult.technical_score,
+                  technical_feedback: transcribeResult.technical_feedback ?? [],
+                }
+              : null;
+        if (technicalPayload) {
           if (typeof window !== "undefined") {
             window.sessionStorage.setItem(
               "latestTechnical",
@@ -365,12 +376,8 @@ export default function Home() {
           }
           technicalOk = true;
           setTechnicalStatus("success");
-        } catch (err) {
-          const message =
-            err instanceof Error
-              ? err.message
-              : "Technical scoring failed. Please try again.";
-          setTechnicalError(message);
+        } else {
+          setTechnicalError("Technical scoring missing from transcription.");
           setTechnicalStatus("error");
         }
       }
@@ -391,6 +398,17 @@ export default function Home() {
             "latestFeedback",
             JSON.stringify(feedbackPayload, null, 2),
           );
+          if (typeof feedbackResult.data?.raw === "string") {
+            window.sessionStorage.setItem(
+              "latestFeedbackRaw",
+              feedbackResult.data.raw,
+            );
+          } else {
+            window.sessionStorage.setItem(
+              "latestFeedbackRaw",
+              JSON.stringify(feedbackResult.data ?? {}, null, 2),
+            );
+          }
         }
         feedbackOk = true;
         setFeedbackStatus("success");

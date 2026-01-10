@@ -16,15 +16,13 @@ const INDEX_POLL_LIMIT = Number(
   process.env.TWELVELABS_INDEX_POLL_LIMIT ?? "45",
 );
 
-const FEEDBACK_PROMPT = `Prompt for Marengo
-
-You are analyzing a candidate's interview performance from video (and audio).
+const FEEDBACK_PROMPT = `You are analyzing a candidate's interview performance from video (and audio).
 
 Evaluate the candidate's delivery, confidence, and communication:
 
 1) Confidence & Delivery
 - Consider eye contact, nervous behaviors, pacing, and filler words (e.g., "um", "uh", "like").
-- Score from 0 to 100.
+- Score from 0 to 10 (NO DECIMALS)
 - Provide exactly TWO concise feedback points mentioning nervous behaviors and clarity of speech.
 
 Return ONLY a JSON object in this format:
@@ -35,7 +33,12 @@ Return ONLY a JSON object in this format:
     "string",
     "string"
   ]
-}`;
+}
+
+Strict rules:
+- Output must be valid JSON with double quotes.
+- Do not wrap in code fences.
+- Do not add any extra text before or after the JSON.`;
 
 export async function POST(request: Request) {
   let filePath: string | null = null;
@@ -159,14 +162,38 @@ export async function POST(request: Request) {
     }
 
     const trimmed = feedbackText.trim();
-    let parsed: unknown = trimmed;
+    const extractJsonBlock = (text: string) => {
+      const start = text.indexOf("{");
+      const end = text.lastIndexOf("}");
+      if (start >= 0 && end > start) {
+        return text.slice(start, end + 1);
+      }
+      return "";
+    };
+
+    let parsed: unknown = null;
     try {
       parsed = JSON.parse(trimmed);
     } catch {
-      parsed = trimmed || {};
+      const extracted = extractJsonBlock(trimmed);
+      if (extracted) {
+        try {
+          parsed = JSON.parse(extracted);
+        } catch {
+          parsed = null;
+        }
+      }
     }
 
-    return NextResponse.json({ feedback: parsed });
+    if (!parsed || typeof parsed !== "object") {
+      console.error("12Labs response was not valid JSON:", feedbackText);
+      return NextResponse.json(
+        { error: "12Labs response was not valid JSON.", raw: feedbackText },
+        { status: 502 },
+      );
+    }
+
+    return NextResponse.json({ feedback: parsed, raw: feedbackText });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Feedback request failed.";
