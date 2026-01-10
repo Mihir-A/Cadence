@@ -15,6 +15,8 @@ type QuestionCategory = {
   questions: string[];
 };
 
+type StepStatus = "idle" | "loading" | "success" | "error";
+
 const QUESTION_BANK: QuestionCategory[] = questionsData.question_bank ?? [];
 const DEFAULT_CATEGORY = QUESTION_BANK[0]?.category ?? "General";
 const DEFAULT_QUESTIONS = QUESTION_BANK[0]?.questions ?? [];
@@ -85,6 +87,11 @@ export default function Home() {
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [technicalError, setTechnicalError] = useState<string | null>(null);
+  const [transcribeStatus, setTranscribeStatus] =
+    useState<StepStatus>("idle");
+  const [technicalStatus, setTechnicalStatus] =
+    useState<StepStatus>("idle");
+  const [feedbackStatus, setFeedbackStatus] = useState<StepStatus>("idle");
 
   useEffect(() => {
     if (
@@ -125,6 +132,23 @@ export default function Home() {
   const durationLabel =
     DURATION_OPTIONS.find((option) => option.seconds === selectedDuration)
       ?.label ?? `${selectedDuration}s`;
+  const showProgressSteps =
+    isTranscribing ||
+    transcribeStatus !== "idle" ||
+    technicalStatus !== "idle" ||
+    feedbackStatus !== "idle";
+  const stepStatusLabel = (status: StepStatus) => {
+    switch (status) {
+      case "loading":
+        return "Running";
+      case "success":
+        return "Done";
+      case "error":
+        return "Failed";
+      default:
+        return "Waiting";
+    }
+  };
 
   const statusText = useMemo(() => {
     if (!isSupported) {
@@ -178,6 +202,9 @@ export default function Home() {
     setTranscriptError(null);
     setFeedbackError(null);
     setTechnicalError(null);
+    setTranscribeStatus("idle");
+    setTechnicalStatus("idle");
+    setFeedbackStatus("idle");
     if (videoUrl) {
       URL.revokeObjectURL(videoUrl);
       setVideoUrl(null);
@@ -261,6 +288,9 @@ export default function Home() {
     setTranscriptError(null);
     setFeedbackError(null);
     setTechnicalError(null);
+    setTranscribeStatus("loading");
+    setTechnicalStatus("idle");
+    setFeedbackStatus("loading");
 
     try {
       const file = recordedBlobRef.current;
@@ -302,16 +332,19 @@ export default function Home() {
           window.sessionStorage.setItem("latestTranscript", transcript);
         }
         transcriptOk = true;
+        setTranscribeStatus("success");
       } catch (err) {
         const message =
           err instanceof Error
             ? err.message
             : "Transcription failed. Please try again.";
         setTranscriptError(message);
+        setTranscribeStatus("error");
       }
 
       if (transcriptOk) {
         try {
+          setTechnicalStatus("loading");
           const technicalResult = await fetch("/api/technical", {
             method: "POST",
             headers: {
@@ -331,12 +364,14 @@ export default function Home() {
             );
           }
           technicalOk = true;
+          setTechnicalStatus("success");
         } catch (err) {
           const message =
             err instanceof Error
               ? err.message
               : "Technical scoring failed. Please try again.";
           setTechnicalError(message);
+          setTechnicalStatus("error");
         }
       }
 
@@ -347,6 +382,7 @@ export default function Home() {
             ? feedbackResult.error.message
             : "Feedback failed. Please try again.";
         setFeedbackError(message);
+        setFeedbackStatus("error");
       } else {
         const feedbackPayload =
           feedbackResult.data?.feedback ?? feedbackResult.data;
@@ -357,6 +393,7 @@ export default function Home() {
           );
         }
         feedbackOk = true;
+        setFeedbackStatus("success");
       }
 
       if (transcriptOk && technicalOk && feedbackOk) {
@@ -368,6 +405,7 @@ export default function Home() {
           ? err.message
           : "Feedback failed. Please try again.";
       setTranscriptError(message);
+      setTranscribeStatus("error");
     } finally {
       setIsTranscribing(false);
     }
@@ -662,14 +700,45 @@ export default function Home() {
                       {technicalError}
                     </p>
                   ) : null}
-                  {isTranscribing ? (
-                    <div className="space-y-2">
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-black/10">
-                        <div className="loading-bar-runner h-full w-1/2 rounded-full bg-gradient-to-r from-[#f7b267] via-[#f29f4b] to-[#f7b267]" />
-                      </div>
-                      <p className="text-xs text-black/50">
-                        Transcribing your response...
-                      </p>
+                  {showProgressSteps ? (
+                    <div className="space-y-3 rounded-2xl border border-black/5 bg-white/70 p-3">
+                      {[
+                        { label: "Transcribing", status: transcribeStatus },
+                        {
+                          label: "Technical check",
+                          status: technicalStatus,
+                        },
+                        {
+                          label: "Confidence eval",
+                          status: feedbackStatus,
+                        },
+                      ].map((step) => (
+                        <div key={step.label} className="space-y-1.5">
+                          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-black/45">
+                            <span>{step.label}</span>
+                            <span>{stepStatusLabel(step.status)}</span>
+                          </div>
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-black/10">
+                            {step.status === "loading" ? (
+                              <div className="loading-bar-runner h-full w-1/2 rounded-full bg-gradient-to-r from-[#f7b267] via-[#f29f4b] to-[#f7b267]" />
+                            ) : (
+                              <div
+                                className={`h-full rounded-full ${
+                                  step.status === "success"
+                                    ? "bg-emerald-500"
+                                    : step.status === "error"
+                                      ? "bg-red-400"
+                                      : "bg-black/20"
+                                }`}
+                                style={{
+                                  width:
+                                    step.status === "idle" ? "25%" : "100%",
+                                }}
+                              />
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : null}
                 </div>
