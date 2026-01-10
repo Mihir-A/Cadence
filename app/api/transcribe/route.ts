@@ -2,7 +2,7 @@ import { Buffer } from "buffer";
 import { NextRequest } from "next/server";
 
 const PLACEHOLDER_TRANSCRIPT =
-  "Transcription temporarily disabled to avoid rate limits. This is a placeholder response.";
+  "Temp response: [PAUSE] umm I think that [FILLER] the key to success is uh hard work and dedication [PAUSE] you know like setting goals and staying focused [FILLER] yeah.";
 const TRANSCRIBE_MODE =
   process.env.TRANSCRIBE_MODE ?? "placeholder";
 
