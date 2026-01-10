@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import questionsData from "./data/questions.json";
 
 const DURATION_OPTIONS = [
   { label: "30s", seconds: 30 },
@@ -9,56 +10,14 @@ const DURATION_OPTIONS = [
   { label: "5 min", seconds: 300 },
 ];
 
-const INTERVIEW_SETS = [
-  {
-    type: "Behavioral / Fit",
-    questions: [
-      "Tell me about yourself.",
-      "Describe a time you handled conflict on a team.",
-      "Why are you interested in this role?",
-    ],
-  },
-  {
-    type: "Technical - Computer Science (DSA / Coding)",
-    questions: [
-      "Explain the time complexity of binary search.",
-      "Walk through how you would detect a cycle in a linked list.",
-      "Design an algorithm to find the top K frequent elements.",
-    ],
-  },
-  {
-    type: "Technical - Economics (Micro / Macro / Metrics)",
-    questions: [
-      "Explain the difference between GDP and GNP.",
-      "How does a price ceiling affect supply and demand?",
-      "Describe what a p-value means in a regression.",
-    ],
-  },
-  {
-    type: "Case Interview",
-    questions: [
-      "Estimate the annual market size for electric scooters in a city.",
-      "A coffee chain's profits are down. How would you analyze it?",
-      "How would you structure a market entry for a new fintech app?",
-    ],
-  },
-  {
-    type: "Quantitative / Math",
-    questions: [
-      "Explain how you would model expected value for a simple gamble.",
-      "If a fair coin is flipped 5 times, what is the probability of exactly 3 heads?",
-      "How would you approximate sqrt(10) without a calculator?",
-    ],
-  },
-  {
-    type: "System Design",
-    questions: [
-      "Design a URL shortener.",
-      "Outline a scalable chat system.",
-      "Design a notification system for a mobile app.",
-    ],
-  },
-];
+type QuestionCategory = {
+  category: string;
+  questions: string[];
+};
+
+const QUESTION_BANK: QuestionCategory[] = questionsData.question_bank ?? [];
+const DEFAULT_CATEGORY = QUESTION_BANK[0]?.category ?? "General";
+const DEFAULT_QUESTIONS = QUESTION_BANK[0]?.questions ?? [];
 
 const shuffleArray = (items: string[]) => {
   const copy = [...items];
@@ -82,6 +41,16 @@ const pickRecorderMimeType = () => {
   ];
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 };
+
+const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
+  width: { ideal: 640 },
+  height: { ideal: 360 },
+  frameRate: { ideal: 20, max: 24 },
+  facingMode: "user",
+};
+
+const VIDEO_BITS_PER_SECOND = 450_000;
+const AUDIO_BITS_PER_SECOND = 48_000;
 
 const formatTime = (totalSeconds: number) => {
   const minutes = Math.floor(totalSeconds / 60);
@@ -107,13 +76,15 @@ export default function Home() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(true);
-  const [selectedType, setSelectedType] = useState(INTERVIEW_SETS[0].type);
+  const [selectedType, setSelectedType] = useState(DEFAULT_CATEGORY);
   const [questions, setQuestions] = useState<string[]>(
-    INTERVIEW_SETS[0].questions,
+    DEFAULT_QUESTIONS,
   );
   const [questionIndex, setQuestionIndex] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [technicalError, setTechnicalError] = useState<string | null>(null);
 
   useEffect(() => {
     if (
@@ -126,7 +97,9 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const nextSet = INTERVIEW_SETS.find((set) => set.type === selectedType);
+    const nextSet = QUESTION_BANK.find(
+      (set) => set.category === selectedType,
+    );
     if (!nextSet) {
       return;
     }
@@ -203,6 +176,8 @@ export default function Home() {
     setTimeLeft(selectedDuration);
     setError(null);
     setTranscriptError(null);
+    setFeedbackError(null);
+    setTechnicalError(null);
     if (videoUrl) {
       URL.revokeObjectURL(videoUrl);
       setVideoUrl(null);
@@ -225,7 +200,7 @@ export default function Home() {
       return streamRef.current;
     }
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: true,
+      video: VIDEO_CONSTRAINTS,
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
@@ -284,40 +259,114 @@ export default function Home() {
 
     setIsTranscribing(true);
     setTranscriptError(null);
+    setFeedbackError(null);
+    setTechnicalError(null);
 
     try {
-      const formData = new FormData();
-      formData.append(
-        "file",
-        recordedBlobRef.current,
-        "interview-practice.webm",
-      );
+      const file = recordedBlobRef.current;
+      const transcribeForm = new FormData();
+      transcribeForm.append("file", file, "interview-practice.webm");
+      const feedbackForm = new FormData();
+      feedbackForm.append("file", file, "interview-practice.webm");
 
-      const response = await fetch("/api/transcribe", {
+      const parseResponse = async (response: Response) => {
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload?.error ?? "Request failed.");
+        }
+        return response.json();
+      };
+
+      const feedbackPromise = fetch("/api/feedback", {
         method: "POST",
-        body: formData,
-      });
+        body: feedbackForm,
+      })
+        .then(parseResponse)
+        .then((data) => ({ ok: true as const, data }))
+        .catch((err) => ({ ok: false as const, error: err }));
 
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error ?? "Transcription failed.");
+      let transcriptOk = false;
+      let technicalOk = false;
+      let feedbackOk = false;
+      let transcript = "";
+      try {
+        const transcribeResult = await fetch("/api/transcribe", {
+          method: "POST",
+          body: transcribeForm,
+        }).then(parseResponse);
+        transcript =
+          typeof transcribeResult?.text === "string"
+            ? transcribeResult.text
+            : "No transcript returned.";
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem("latestTranscript", transcript);
+        }
+        transcriptOk = true;
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Transcription failed. Please try again.";
+        setTranscriptError(message);
       }
 
-      const payload = await response.json();
-      const transcript =
-        typeof payload?.text === "string"
-          ? payload.text
-          : "No transcript returned.";
-
-      if (typeof window !== "undefined") {
-        window.sessionStorage.setItem("latestTranscript", transcript);
+      if (transcriptOk) {
+        try {
+          const technicalResult = await fetch("/api/technical", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              question: currentQuestion,
+              transcript,
+            }),
+          }).then(parseResponse);
+          const technicalPayload =
+            technicalResult?.technical ?? technicalResult;
+          if (typeof window !== "undefined") {
+            window.sessionStorage.setItem(
+              "latestTechnical",
+              JSON.stringify(technicalPayload, null, 2),
+            );
+          }
+          technicalOk = true;
+        } catch (err) {
+          const message =
+            err instanceof Error
+              ? err.message
+              : "Technical scoring failed. Please try again.";
+          setTechnicalError(message);
+        }
       }
-      router.push("/feedback");
+
+      const feedbackResult = await feedbackPromise;
+      if (!feedbackResult.ok) {
+        const message =
+          feedbackResult.error instanceof Error
+            ? feedbackResult.error.message
+            : "Feedback failed. Please try again.";
+        setFeedbackError(message);
+      } else {
+        const feedbackPayload =
+          feedbackResult.data?.feedback ?? feedbackResult.data;
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem(
+            "latestFeedback",
+            JSON.stringify(feedbackPayload, null, 2),
+          );
+        }
+        feedbackOk = true;
+      }
+
+      if (transcriptOk && technicalOk && feedbackOk) {
+        router.push("/feedback");
+      }
     } catch (err) {
       const message =
         err instanceof Error
           ? err.message
-          : "Transcription failed. Please try again.";
+          : "Feedback failed. Please try again.";
       setTranscriptError(message);
     } finally {
       setIsTranscribing(false);
@@ -343,9 +392,14 @@ export default function Home() {
     try {
       const stream = await ensureStream();
       const mimeType = pickRecorderMimeType();
-      const recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream);
+      const recorderOptions: MediaRecorderOptions = {
+        videoBitsPerSecond: VIDEO_BITS_PER_SECOND,
+        audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
+      };
+      if (mimeType) {
+        recorderOptions.mimeType = mimeType;
+      }
+      const recorder = new MediaRecorder(stream, recorderOptions);
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
 
@@ -467,9 +521,9 @@ export default function Home() {
                     disabled={isRecording}
                     className="mt-2 w-full rounded-2xl border border-black/15 bg-white/80 px-3 py-2 text-sm text-black/80 shadow-sm outline-none transition focus:border-black/40 disabled:cursor-not-allowed disabled:bg-black/5"
                   >
-                    {INTERVIEW_SETS.map((set) => (
-                      <option key={set.type} value={set.type}>
-                        {set.type}
+                    {QUESTION_BANK.map((set) => (
+                      <option key={set.category} value={set.category}>
+                        {set.category}
                       </option>
                     ))}
                   </select>
@@ -596,6 +650,16 @@ export default function Home() {
                   {transcriptError ? (
                     <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
                       {transcriptError}
+                    </p>
+                  ) : null}
+                  {feedbackError ? (
+                    <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                      {feedbackError}
+                    </p>
+                  ) : null}
+                  {technicalError ? (
+                    <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                      {technicalError}
                     </p>
                   ) : null}
                   {isTranscribing ? (

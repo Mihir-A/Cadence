@@ -5,12 +5,16 @@ import { useEffect, useState } from "react";
 
 export default function FeedbackPage() {
   const [transcript, setTranscript] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [technical, setTechnical] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
     setTranscript(window.sessionStorage.getItem("latestTranscript") ?? "");
+    setFeedback(window.sessionStorage.getItem("latestFeedback") ?? "");
+    setTechnical(window.sessionStorage.getItem("latestTechnical") ?? "");
   }, []);
 
   return (
@@ -33,19 +37,39 @@ export default function FeedbackPage() {
             </p>
           </div>
 
-          <div className="rounded-3xl border border-black/10 bg-white/80 p-6 shadow-[0_24px_60px_rgba(15,12,10,0.18)] backdrop-blur">
-            <p className="text-xs uppercase tracking-[0.25em] text-black/50">
-              Transcribed text
-            </p>
-            <div className="mt-4 min-h-[240px] whitespace-pre-wrap rounded-2xl border border-black/5 bg-white/70 p-4 text-sm text-black/80">
-              {transcript || "No transcript available yet."}
+          <div className="grid gap-6">
+            <div className="rounded-3xl border border-black/10 bg-white/80 p-6 shadow-[0_24px_60px_rgba(15,12,10,0.18)] backdrop-blur">
+              <p className="text-xs uppercase tracking-[0.25em] text-black/50">
+                Technical correctness
+              </p>
+              <div className="mt-4 min-h-[160px] whitespace-pre-wrap rounded-2xl border border-black/5 bg-white/70 p-4 text-sm text-black/80">
+                {technical || "No technical feedback available yet."}
+              </div>
             </div>
-            <Link
-              href="/"
-              className="mt-6 inline-flex items-center justify-center rounded-full border border-black/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black/60 transition hover:border-black/30 hover:text-black"
-            >
-              Back to recorder
-            </Link>
+
+            <div className="rounded-3xl border border-black/10 bg-white/80 p-6 shadow-[0_24px_60px_rgba(15,12,10,0.18)] backdrop-blur">
+              <p className="text-xs uppercase tracking-[0.25em] text-black/50">
+                12Labs feedback
+              </p>
+              <div className="mt-4 min-h-[160px] whitespace-pre-wrap rounded-2xl border border-black/5 bg-white/70 p-4 text-sm text-black/80">
+                {feedback || "No feedback available yet."}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-black/10 bg-white/80 p-6 shadow-[0_24px_60px_rgba(15,12,10,0.18)] backdrop-blur">
+              <p className="text-xs uppercase tracking-[0.25em] text-black/50">
+                Transcribed text
+              </p>
+              <div className="mt-4 min-h-[200px] whitespace-pre-wrap rounded-2xl border border-black/5 bg-white/70 p-4 text-sm text-black/80">
+                {transcript || "No transcript available yet."}
+              </div>
+              <Link
+                href="/"
+                className="mt-6 inline-flex items-center justify-center rounded-full border border-black/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black/60 transition hover:border-black/30 hover:text-black"
+              >
+                Back to recorder
+              </Link>
+            </div>
           </div>
         </main>
       </div>

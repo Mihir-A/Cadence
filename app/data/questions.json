@@ -1,0 +1,76 @@
+{
+  "question_bank": [
+    {
+      "category": "Software Engineering",
+      "questions": [
+        "What is the time complexity of binary search, and why?",
+        "What problem does a hash table solve, and what’s a common tradeoff?",
+        "What’s the difference between a process and a thread?"
+      ]
+    },
+    {
+      "category": "Quantitative Finance",
+      "questions": [
+        "What does expected value represent in probability?",
+        "Why might a model overfit financial data?",
+        "What is volatility, conceptually?"
+      ]
+    },
+    {
+      "category": "Product Management",
+      "questions": [
+        "What metric would you use to evaluate a new feature?",
+        "What’s the difference between a user need and a feature?",
+        "How would you detect a broken funnel?"
+      ]
+    },
+    {
+      "category": "Consulting / Case",
+      "questions": [
+        "What are the main drivers of revenue for a company?",
+        "How would you structure market size estimation?",
+        "What costs scale with users in a tech company?"
+      ]
+    },
+    {
+      "category": "Research / STEM",
+      "questions": [
+        "What is a control variable, and why is it important?",
+        "What does statistical significance mean?",
+        "Why do we use baselines in experiments?"
+      ]
+    },
+    {
+      "category": "Data Science / Machine Learning",
+      "questions": [
+        "What’s the difference between bias and variance?",
+        "What is precision vs recall?",
+        "Why is feature scaling important?"
+      ]
+    },
+    {
+      "category": "Design / UX",
+      "questions": [
+        "What is an affordance in design?",
+        "Why are usability tests run with small sample sizes?",
+        "What does accessibility mean in UX?"
+      ]
+    },
+    {
+      "category": "Business / Strategy",
+      "questions": [
+        "What is a competitive advantage?",
+        "Why might revenue grow while profit declines?",
+        "What does unit economics mean?"
+      ]
+    },
+    {
+      "category": "Behavioral",
+      "questions": [
+        "What motivates you most in your work?",
+        "How do you handle ambiguity?",
+        "What does good teamwork mean to you?"
+      ]
+    }
+  ]
+}

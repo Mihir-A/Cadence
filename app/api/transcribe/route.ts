@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 const PLACEHOLDER_TRANSCRIPT =
   "Temp response: [PAUSE] umm I think that [FILLER] the key to success is uh hard work and dedication [PAUSE] you know like setting goals and staying focused [FILLER] yeah.";
 const TRANSCRIBE_MODE =
-  process.env.TRANSCRIBE_MODE ?? "placeholder";
+  process.env.TRANSCRIBE_MODE ?? "gemini"; // "gemini" or "placeholder"
 
 const normalizeModel = (model: string) =>
   model.startsWith("models/") ? model : `models/${model}`;
