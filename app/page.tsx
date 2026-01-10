@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const DURATION_OPTIONS = [
@@ -68,6 +69,20 @@ const shuffleArray = (items: string[]) => {
   return copy;
 };
 
+const pickRecorderMimeType = () => {
+  if (typeof MediaRecorder === "undefined") {
+    return "";
+  }
+  const candidates = [
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+  ];
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
+};
+
 const formatTime = (totalSeconds: number) => {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = Math.max(0, totalSeconds % 60);
@@ -79,7 +94,9 @@ export default function Home() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const recordedBlobRef = useRef<Blob | null>(null);
   const timerRef = useRef<number | null>(null);
+  const router = useRouter();
 
   const [isRecording, setIsRecording] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
@@ -95,6 +112,8 @@ export default function Home() {
     INTERVIEW_SETS[0].questions,
   );
   const [questionIndex, setQuestionIndex] = useState(0);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcriptError, setTranscriptError] = useState<string | null>(null);
 
   useEffect(() => {
     if (
@@ -179,9 +198,11 @@ export default function Home() {
   const resetRecording = () => {
     clearTimer();
     chunksRef.current = [];
+    recordedBlobRef.current = null;
     setIsRecording(false);
     setTimeLeft(selectedDuration);
     setError(null);
+    setTranscriptError(null);
     if (videoUrl) {
       URL.revokeObjectURL(videoUrl);
       setVideoUrl(null);
@@ -205,8 +226,17 @@ export default function Home() {
     }
     const stream = await navigator.mediaDevices.getUserMedia({
       video: true,
-      audio: true,
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
     });
+    const audioTracks = stream.getAudioTracks();
+    if (!audioTracks.length) {
+      stream.getTracks().forEach((track) => track.stop());
+      throw new Error("No microphone detected.");
+    }
     streamRef.current = stream;
     setIsPreviewing(true);
     return stream;
@@ -230,7 +260,11 @@ export default function Home() {
     try {
       await ensureStream();
     } catch (err) {
-      setError("Camera or microphone permission was denied.");
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Camera or microphone permission was denied.";
+      setError(message);
       cleanupStream();
     }
   };
@@ -240,6 +274,54 @@ export default function Home() {
       return;
     }
     setQuestionIndex((prev) => (prev + 1) % questions.length);
+  };
+
+  const transcribeRecording = async () => {
+    if (!recordedBlobRef.current) {
+      setTranscriptError("Record a response before requesting feedback.");
+      return;
+    }
+
+    setIsTranscribing(true);
+    setTranscriptError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append(
+        "file",
+        recordedBlobRef.current,
+        "interview-practice.webm",
+      );
+
+      const response = await fetch("/api/transcribe", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error ?? "Transcription failed.");
+      }
+
+      const payload = await response.json();
+      const transcript =
+        typeof payload?.text === "string"
+          ? payload.text
+          : "No transcript returned.";
+
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("latestTranscript", transcript);
+      }
+      router.push("/feedback");
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Transcription failed. Please try again.";
+      setTranscriptError(message);
+    } finally {
+      setIsTranscribing(false);
+    }
   };
 
   const startRecording = async () => {
@@ -260,7 +342,10 @@ export default function Home() {
 
     try {
       const stream = await ensureStream();
-      const recorder = new MediaRecorder(stream);
+      const mimeType = pickRecorderMimeType();
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
 
@@ -283,6 +368,7 @@ export default function Home() {
           type: recorder.mimeType || "video/webm",
         });
         if (recordedBlob.size > 0) {
+          recordedBlobRef.current = recordedBlob;
           const nextUrl = URL.createObjectURL(recordedBlob);
           setVideoUrl(nextUrl);
         }
@@ -306,7 +392,11 @@ export default function Home() {
         }
       }, 200);
     } catch (err) {
-      setError("Camera or microphone permission was denied.");
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Camera or microphone permission was denied.";
+      setError(message);
       cleanupStream();
     }
   };
@@ -503,6 +593,21 @@ export default function Home() {
                       {error}
                     </p>
                   ) : null}
+                  {transcriptError ? (
+                    <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                      {transcriptError}
+                    </p>
+                  ) : null}
+                  {isTranscribing ? (
+                    <div className="space-y-2">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-black/10">
+                        <div className="loading-bar-runner h-full w-1/2 rounded-full bg-gradient-to-r from-[#f7b267] via-[#f29f4b] to-[#f7b267]" />
+                      </div>
+                      <p className="text-xs text-black/50">
+                        Transcribing your response...
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-wrap gap-3">
@@ -529,7 +634,11 @@ export default function Home() {
                     type="button"
                     onClick={startRecording}
                     disabled={!isSupported || isRecording}
-                    className="inline-flex items-center justify-center rounded-full bg-[#1f1a17] px-5 py-2.5 text-sm font-medium text-[#fef7f1] transition hover:bg-black/90 disabled:cursor-not-allowed disabled:bg-black/30"
+                    className={`inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      videoUrl
+                        ? "border border-black/15 bg-white/80 text-black/70 hover:border-black/30 hover:text-black"
+                        : "bg-[#1f1a17] text-[#fef7f1] hover:bg-black/90"
+                    }`}
                   >
                     {videoUrl ? "Record again" : "Start recording"}
                   </button>
@@ -550,6 +659,16 @@ export default function Home() {
                     >
                       Download clip
                     </a>
+                  ) : null}
+                  {videoUrl ? (
+                    <button
+                      type="button"
+                      onClick={transcribeRecording}
+                      disabled={isTranscribing}
+                      className="inline-flex items-center justify-center rounded-full bg-[#f7b267] px-5 py-2.5 text-sm font-semibold text-[#1f1a17] shadow-[0_12px_24px_rgba(247,178,103,0.35)] transition hover:bg-[#f29f4b] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isTranscribing ? "Transcribing..." : "Open feedback"}
+                    </button>
                   ) : null}
                 </div>
               </div>
