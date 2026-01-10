@@ -51,10 +51,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const apiKey = process.env["12LABS_API_KEY"];
+    const apiKey = process.env["TWELVE_LABS_API_KEY"];
     if (!apiKey) {
       return NextResponse.json(
-        { error: "Missing 12LABS_API_KEY in the environment." },
+        { error: "Missing TWELVE_LABS_API_KEY in the environment." },
         { status: 500 },
       );
     }
@@ -122,16 +122,19 @@ export async function POST(request: Request) {
         { status: 502 },
       );
     }
+    const indexedAssetId = indexedAsset.id;
 
+    let indexedAssetStatus: string | undefined;
     for (let attempt = 0; attempt < INDEX_POLL_LIMIT; attempt += 1) {
-      indexedAsset = await client.indexes.indexedAssets.retrieve(
+      const polledAsset = await client.indexes.indexedAssets.retrieve(
         indexId,
-        indexedAsset.id,
+        indexedAssetId,
       );
-      if (indexedAsset.status === "ready") {
+      indexedAssetStatus = polledAsset.status;
+      if (indexedAssetStatus === "ready") {
         break;
       }
-      if (indexedAsset.status === "failed") {
+      if (indexedAssetStatus === "failed") {
         return NextResponse.json(
           { error: "Indexing failed." },
           { status: 502 },
@@ -142,7 +145,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (indexedAsset.status !== "ready") {
+    if (indexedAssetStatus !== "ready") {
       return NextResponse.json(
         { error: "Indexing timed out." },
         { status: 504 },
@@ -150,7 +153,7 @@ export async function POST(request: Request) {
     }
 
     const textStream = await client.analyzeStream({
-      videoId: indexedAsset.id,
+      videoId: indexedAssetId,
       prompt: FEEDBACK_PROMPT,
     });
 
