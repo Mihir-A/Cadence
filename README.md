@@ -1,24 +1,14 @@
 # Confidence-AI
 
-A focused 45-second interview practice recorder built with Next.js + Tailwind CSS.
+A focused interview practice recorder built with Next.js + Tailwind CSS + Gemini 2.5 Flash + Twelve Labs Marengo.
+- Uses Twelve Labs Marengo to detect nervous movements and give a confidence score along with feedback.
+- Uses Gemini 2.5 Flash to detect accuracy of answers as well as count pauses and filler words to give an accuracy score with feedback.
 
-## Getting Started
 
-First, run the development server:
+Open [https://cadence-teal.vercel.app) with your browser to see the result.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 ## Deploy on Vercel
 
