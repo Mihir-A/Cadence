@@ -349,9 +349,10 @@ export default function Home() {
     if (!recording) {
       recording = await loadRecording().catch(() => null);
       if (recording) {
-        recordedBlobRef.current = recording;
+        const restoredRecording = recording;
+        recordedBlobRef.current = restoredRecording;
         setVideoUrl((current) =>
-          current ? current : URL.createObjectURL(recording),
+          current ? current : URL.createObjectURL(restoredRecording),
         );
       }
     }
