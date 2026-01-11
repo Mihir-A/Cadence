@@ -1,17 +1,51 @@
-# Confidence-AI
+# Cadence
 
-A focused interview practice recorder built with Next.js + Tailwind CSS + Gemini 2.5 Flash + Twelve Labs Marengo.
-- Uses Twelve Labs Marengo to detect nervous movements and give a confidence score along with feedback.
-- Uses Gemini 2.5 Flash to detect accuracy of answers as well as count pauses and filler words to give an accuracy score with feedback.
+Cadence is a focused interview practice recorder built with Next.js + Tailwind CSS, Gemini, and TwelveLabs.
 
+## What it does
+- Records interview responses and stores clips locally in the browser.
+- Uses Gemini to transcribe, score technical correctness, and count long pauses + filler words.
+- Uses TwelveLabs to score delivery confidence with concise feedback.
+- Lets you review results, retry a question, and download or delete clips.
 
-Open [https://cadence-teal.vercel.app) with your browser to see the result.
+## Demo
+https://cadence-teal.vercel.app
 
+## Getting started
+Install dependencies:
+```
+npm install
+```
 
+Create a `.env` file with:
+```
+GEMINI_API_KEY=your_key
+TWELVE_LABS_API_KEY=your_key
+```
 
+Run locally:
+```
+npm run dev
+```
+
+Build:
+```
+npm run build
+```
+
+## Configuration
+Optional environment variables:
+```
+NEXT_PUBLIC_AI_CALLS_DISABLED=false
+AI_CALLS_DISABLED=false
+FEEDBACK_MODE=12labs
+TRANSCRIBE_MODE=gemini
+TWELVELABS_INDEX_ID=your_index_id
+TWELVELABS_INDEX_NAME=interview-feedback
+TWELVELABS_MAX_UPLOAD_MB=20
+```
+
+When `NEXT_PUBLIC_AI_CALLS_DISABLED=true` or `AI_CALLS_DISABLED=true`, Cadence returns placeholder responses and skips external API calls.
 
 ## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Deploy with the Vercel platform or your preferred host. Ensure the environment variables above are set in your deployment settings.
