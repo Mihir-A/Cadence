@@ -501,16 +501,32 @@ export default function Home() {
       }
 
       if (transcriptOk) {
-        technicalPayload =
+        const technicalFromObject =
           typeof transcribeResult?.technical === "object" &&
           transcribeResult.technical !== null
-            ? transcribeResult.technical
+            ? (transcribeResult.technical as Record<string, unknown>)
+            : null;
+        const technicalScore =
+          technicalFromObject &&
+          typeof technicalFromObject.technical_score === "number"
+            ? technicalFromObject.technical_score
             : typeof transcribeResult?.technical_score === "number"
-              ? {
-                  technical_score: transcribeResult.technical_score,
-                  technical_feedback: transcribeResult.technical_feedback ?? [],
-                }
+              ? transcribeResult.technical_score
               : null;
+        const technicalFeedback =
+          technicalFromObject &&
+          Array.isArray(technicalFromObject.technical_feedback)
+            ? technicalFromObject.technical_feedback.map((item) => String(item))
+            : Array.isArray(transcribeResult?.technical_feedback)
+              ? transcribeResult.technical_feedback.map((item) => String(item))
+              : null;
+        technicalPayload =
+          technicalScore !== null && technicalFeedback
+            ? {
+                technical_score: technicalScore,
+                technical_feedback: technicalFeedback,
+              }
+            : null;
         if (technicalPayload) {
           if (typeof window !== "undefined") {
             window.sessionStorage.setItem(
