@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import Navbar from "./components/Navbar";
 import {
   clearRecording,
   loadRecording,
@@ -63,6 +64,8 @@ const RETRY_QUESTION_KEY = "retryQuestion";
 const RETRY_CATEGORY_KEY = "retryCategory";
 const LAST_QUESTION_KEY = "latestQuestion";
 const LAST_CATEGORY_KEY = "latestQuestionCategory";
+const HISTORY_KEY = "cadenceHistory";
+const HISTORY_LIMIT = 20;
 
 const formatTime = (totalSeconds: number) => {
   const minutes = Math.floor(totalSeconds / 60);
@@ -436,6 +439,11 @@ export default function Home() {
       let feedbackOk = false;
       let transcript = "";
       let transcribeResult: Record<string, unknown> | null = null;
+      let technicalPayload: {
+        technical_score: number;
+        technical_feedback: string[];
+      } | null = null;
+      let feedbackPayload: Record<string, unknown> | null = null;
       try {
         transcribeResult = await fetch("/api/transcribe", {
           method: "POST",
@@ -493,7 +501,7 @@ export default function Home() {
       }
 
       if (transcriptOk) {
-        const technicalPayload =
+        technicalPayload =
           typeof transcribeResult?.technical === "object" &&
           transcribeResult.technical !== null
             ? transcribeResult.technical
@@ -527,8 +535,7 @@ export default function Home() {
         setFeedbackError(message);
         setFeedbackStatus("error");
       } else {
-        const feedbackPayload =
-          feedbackResult.data?.feedback ?? feedbackResult.data;
+        feedbackPayload = feedbackResult.data?.feedback ?? feedbackResult.data;
         if (typeof window !== "undefined") {
           window.sessionStorage.setItem(
             "latestFeedback",
@@ -551,6 +558,44 @@ export default function Home() {
       }
 
       if (transcriptOk && technicalOk && feedbackOk) {
+        if (typeof window !== "undefined") {
+          const confidenceScore =
+            typeof feedbackPayload?.confidence_score === "number"
+              ? feedbackPayload.confidence_score
+              : null;
+          const pauseCount =
+            typeof transcribeResult?.pause_count === "number"
+              ? transcribeResult.pause_count
+              : null;
+          const fillerCount =
+            typeof transcribeResult?.filler_word_count === "number"
+              ? transcribeResult.filler_word_count
+              : null;
+          const historyEntry = {
+            timestamp: new Date().toISOString(),
+            question: currentQuestion,
+            category: selectedType,
+            confidence_score: confidenceScore,
+            technical_score: technicalPayload?.technical_score ?? null,
+            pause_count: pauseCount,
+            filler_word_count: fillerCount,
+          };
+          let history: Array<typeof historyEntry> = [];
+          try {
+            const stored = window.localStorage.getItem(HISTORY_KEY);
+            history = stored ? JSON.parse(stored) : [];
+            if (!Array.isArray(history)) {
+              history = [];
+            }
+          } catch {
+            history = [];
+          }
+          history.push(historyEntry);
+          if (history.length > HISTORY_LIMIT) {
+            history = history.slice(-HISTORY_LIMIT);
+          }
+          window.localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+        }
         router.push("/feedback");
       }
     } catch (err) {
@@ -671,15 +716,9 @@ export default function Home() {
         <div className="pointer-events-none absolute bottom-0 left-0 h-80 w-80 rounded-full bg-[#7fd1b9]/40 blur-[160px]" />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.8),_rgba(255,255,255,0))]" />
 
-        <main className="relative mx-auto flex min-h-screen max-w-6xl flex-col items-start justify-center gap-12 px-6 py-16 lg:flex-row lg:items-center lg:gap-16">
+        <Navbar />
+        <main className="relative mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl flex-col items-start justify-center gap-12 px-6 py-16 lg:flex-row lg:items-center lg:gap-16">
           <section className="max-w-xl space-y-6">
-            <div className="inline-flex items-center">
-              <img
-                src="/cadencelogo.png"
-                alt="Cadence"
-                className="h-16 w-auto"
-              />
-            </div>
             <h1 className="text-4xl font-semibold tracking-tight text-[#1d1612] sm:text-5xl">
               Timed interview sprints, built for focus.
             </h1>

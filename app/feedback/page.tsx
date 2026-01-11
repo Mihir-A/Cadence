@@ -3,7 +3,21 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import Navbar from "../components/Navbar";
 import { clearRecording, loadRecording } from "../lib/recordingStorage";
+
+type HistoryEntry = {
+  timestamp: string;
+  question?: string;
+  category?: string;
+  confidence_score?: number | null;
+  technical_score?: number | null;
+  pause_count?: number | null;
+  filler_word_count?: number | null;
+};
+
+const HISTORY_KEY = "cadenceHistory";
+const HISTORY_CHART_LIMIT = 7;
 
 export default function FeedbackPage() {
   const [transcript, setTranscript] = useState("");
@@ -15,6 +29,7 @@ export default function FeedbackPage() {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [latestQuestion, setLatestQuestion] = useState("");
   const [latestCategory, setLatestCategory] = useState("");
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -51,6 +66,21 @@ export default function FeedbackPage() {
         URL.revokeObjectURL(objectUrl);
       }
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const stored = window.localStorage.getItem(HISTORY_KEY);
+      const parsed = stored ? JSON.parse(stored) : [];
+      if (Array.isArray(parsed)) {
+        setHistory(parsed);
+      }
+    } catch {
+      setHistory([]);
+    }
   }, []);
 
   const parseJson = (value: string) => {
@@ -102,6 +132,31 @@ export default function FeedbackPage() {
         )
       : undefined;
 
+  const chartEntries = history.slice(-HISTORY_CHART_LIMIT);
+  const normalizeScore = (value: number | null | undefined) =>
+    Math.max(0, Math.min(10, value ?? 0));
+  const formatShortDate = (timestamp: string) => {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+      return "Unknown";
+    }
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  };
+  const getAdjustedConfidence = (entry: HistoryEntry) => {
+    if (typeof entry.confidence_score !== "number") {
+      return null;
+    }
+    const pause = entry.pause_count ?? 0;
+    const filler = entry.filler_word_count ?? 0;
+    return Math.max(
+      1,
+      entry.confidence_score - Math.floor((pause + filler) / 2),
+    );
+  };
+
   const renderScoreBar = (value: number | undefined) => {
     const clamped = Math.max(0, Math.min(10, value ?? 0));
     const filled = Math.round(clamped);
@@ -142,7 +197,8 @@ export default function FeedbackPage() {
         <div className="pointer-events-none absolute bottom-0 left-0 h-80 w-80 rounded-full bg-[#7fd1b9]/40 blur-[160px]" />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.8),_rgba(255,255,255,0))]" />
 
-        <main className="relative mx-auto flex min-h-screen w-full max-w-3xl flex-col justify-center gap-6 px-6 py-16">
+        <Navbar />
+        <main className="relative mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-3xl flex-col justify-center gap-6 px-6 py-16">
           <div className="space-y-2">
             <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium uppercase tracking-[0.2em] text-black/60">
               Cadence Feedback
@@ -324,6 +380,106 @@ export default function FeedbackPage() {
                 </p>
               )}
             </div>
+          </div>
+
+          <div
+            id="history"
+            className="space-y-4 rounded-3xl border border-black/10 bg-white/80 p-6 shadow-[0_20px_50px_rgba(15,12,10,0.12)] backdrop-blur"
+          >
+            <p className="text-xs uppercase tracking-[0.25em] text-black/50">
+              History
+            </p>
+            {history.length === 0 ? (
+              <p className="text-sm text-black/50">
+                No past sessions saved yet.
+              </p>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-black/50">
+                    Confidence trend
+                  </p>
+                  <div className="mt-3 flex items-end gap-2">
+                    {chartEntries.map((entry, index) => {
+                      const score = normalizeScore(
+                        getAdjustedConfidence(entry),
+                      );
+                      return (
+                        <div
+                          key={`conf-${entry.timestamp}-${index}`}
+                          className="flex flex-1 flex-col items-center gap-2"
+                        >
+                          <div className="flex h-20 w-full items-end rounded-full bg-black/5">
+                            <div
+                              className="w-full rounded-full bg-[#f29f4b]"
+                              style={{
+                                height: `${(score / 10) * 100}%`,
+                              }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-black/40">
+                            {formatShortDate(entry.timestamp)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-black/50">
+                    Technical trend
+                  </p>
+                  <div className="mt-3 flex items-end gap-2">
+                    {chartEntries.map((entry, index) => {
+                      const score = normalizeScore(entry.technical_score);
+                      return (
+                        <div
+                          key={`tech-${entry.timestamp}-${index}`}
+                          className="flex flex-1 flex-col items-center gap-2"
+                        >
+                          <div className="flex h-20 w-full items-end rounded-full bg-black/5">
+                            <div
+                              className="w-full rounded-full bg-[#7fd1b9]"
+                              style={{
+                                height: `${(score / 10) * 100}%`,
+                              }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-black/40">
+                            {formatShortDate(entry.timestamp)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+            {history.length > 0 ? (
+              <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-black/50">
+                  Recent sessions
+                </p>
+                <div className="mt-3 space-y-2 text-sm text-black/60">
+                  {history
+                    .slice(-5)
+                    .reverse()
+                    .map((entry) => (
+                      <div
+                        key={`row-${entry.timestamp}`}
+                        className="flex flex-wrap items-center justify-between gap-2"
+                      >
+                        <span className="text-black/70">
+                          {entry.question ?? "Session"}
+                        </span>
+                        <span className="text-xs text-black/40">
+                          {formatShortDate(entry.timestamp)}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-4 rounded-3xl border border-black/10 bg-white/80 p-6 shadow-[0_20px_50px_rgba(15,12,10,0.12)] backdrop-blur">
