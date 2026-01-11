@@ -673,15 +673,15 @@ export default function Home() {
 
         <main className="relative mx-auto flex min-h-screen max-w-6xl flex-col items-start justify-center gap-12 px-6 py-16 lg:flex-row lg:items-center lg:gap-16">
           <section className="max-w-xl space-y-6">
-            <div className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-3 py-1">
+            <div className="inline-flex items-center">
               <img
                 src="/cadencelogo.png"
                 alt="Cadence"
-                className="h-6 w-auto"
+                className="h-16 w-auto"
               />
             </div>
             <h1 className="text-4xl font-semibold tracking-tight text-[#1d1612] sm:text-5xl">
-              Cadence: timed interview sprints, built for focus.
+              Timed interview sprints, built for focus.
             </h1>
             <p className="text-lg leading-relaxed text-black/70">
               Pick a format, answer a prompt, and record a focused response
