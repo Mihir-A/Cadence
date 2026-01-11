@@ -673,9 +673,13 @@ export default function Home() {
 
         <main className="relative mx-auto flex min-h-screen max-w-6xl flex-col items-start justify-center gap-12 px-6 py-16 lg:flex-row lg:items-center lg:gap-16">
           <section className="max-w-xl space-y-6">
-            <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium uppercase tracking-[0.2em] text-black/60">
-              Cadence Practice Mode
-            </span>
+            <div className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-3 py-1">
+              <img
+                src="/cadencelogo.png"
+                alt="Cadence"
+                className="h-6 w-auto"
+              />
+            </div>
             <h1 className="text-4xl font-semibold tracking-tight text-[#1d1612] sm:text-5xl">
               Cadence: timed interview sprints, built for focus.
             </h1>
@@ -968,6 +972,15 @@ export default function Home() {
                     >
                       Download clip
                     </a>
+                  ) : null}
+                  {videoUrl ? (
+                    <button
+                      type="button"
+                      onClick={resetRecording}
+                      className="inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 px-5 py-2.5 text-sm font-medium text-red-700 transition hover:border-red-300 hover:text-red-800"
+                    >
+                      Delete clip
+                    </button>
                   ) : null}
                   {videoUrl ? (
                     <button
