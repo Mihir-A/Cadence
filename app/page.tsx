@@ -28,15 +28,6 @@ const DEFAULT_CATEGORY = QUESTION_BANK[0]?.category ?? "General";
 const DEFAULT_QUESTIONS = QUESTION_BANK[0]?.questions ?? [];
 const CUSTOM_CATEGORY = "Custom";
 
-const shuffleArray = (items: string[]) => {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-};
-
 const pickRecorderMimeType = () => {
   if (typeof MediaRecorder === "undefined") {
     return "";
@@ -191,14 +182,14 @@ export default function Home() {
         const remaining = nextSet.questions.filter(
           (question) => question !== retryQuestion,
         );
-        setQuestions([retryQuestion, ...shuffleArray(remaining)]);
+        setQuestions([retryQuestion, ...remaining]);
         setQuestionIndex(0);
         window.sessionStorage.removeItem(RETRY_QUESTION_KEY);
         window.sessionStorage.removeItem(RETRY_CATEGORY_KEY);
         return;
       }
     }
-    setQuestions(shuffleArray(nextSet.questions));
+    setQuestions([...nextSet.questions]);
     setQuestionIndex(0);
   }, [customQuestion, selectedType]);
 
@@ -372,6 +363,15 @@ export default function Home() {
       return;
     }
     setQuestionIndex((prev) => (prev + 1) % questions.length);
+  };
+
+  const goToPreviousQuestion = () => {
+    if (!questions.length) {
+      return;
+    }
+    setQuestionIndex((prev) =>
+      prev === 0 ? questions.length - 1 : prev - 1,
+    );
   };
 
   const transcribeRecording = async () => {
@@ -832,14 +832,24 @@ export default function Home() {
                     <p className="mt-3 text-base font-medium text-black/80">
                       {currentQuestion}
                     </p>
-                    <button
-                      type="button"
-                      onClick={goToNextQuestion}
-                      disabled={isRecording || questionCount === 0}
-                      className="mt-4 inline-flex items-center justify-center rounded-full border border-black/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black/60 transition hover:border-black/30 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Next question
-                    </button>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={goToPreviousQuestion}
+                        disabled={isRecording || questionCount === 0}
+                        className="inline-flex cursor-pointer items-center justify-center rounded-full border border-black/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black/60 transition hover:border-black/30 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Previous question
+                      </button>
+                      <button
+                        type="button"
+                        onClick={goToNextQuestion}
+                        disabled={isRecording || questionCount === 0}
+                        className="inline-flex cursor-pointer items-center justify-center rounded-full border border-black/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black/60 transition hover:border-black/30 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Next question
+                      </button>
+                    </div>
                   </>
                 )}
               </div>
@@ -984,7 +994,7 @@ export default function Home() {
                       type="button"
                       onClick={startPreview}
                       disabled={!isSupported}
-                      className="inline-flex items-center justify-center rounded-full border border-black/15 px-5 py-2.5 text-sm font-medium text-black/70 transition hover:border-black/30 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-flex cursor-pointer items-center justify-center rounded-full border border-black/15 px-5 py-2.5 text-sm font-medium text-black/70 transition hover:border-black/30 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Enable camera
                     </button>
@@ -1002,7 +1012,7 @@ export default function Home() {
                     type="button"
                     onClick={startRecording}
                     disabled={!isSupported || isRecording}
-                    className={`inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    className={`inline-flex cursor-pointer items-center justify-center rounded-full px-5 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
                       videoUrl
                         ? "border border-black/15 bg-white/80 text-black/70 hover:border-black/30 hover:text-black"
                         : "bg-[#1f1a17] text-[#fef7f1] hover:bg-black/90"
@@ -1032,7 +1042,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={resetRecording}
-                      className="inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 px-5 py-2.5 text-sm font-medium text-red-700 transition hover:border-red-300 hover:text-red-800"
+                      className="inline-flex cursor-pointer items-center justify-center rounded-full border border-red-200 bg-red-50 px-5 py-2.5 text-sm font-medium text-red-700 transition hover:border-red-300 hover:text-red-800"
                     >
                       Delete clip
                     </button>
@@ -1042,7 +1052,7 @@ export default function Home() {
                       type="button"
                       onClick={transcribeRecording}
                       disabled={isTranscribing}
-                      className="inline-flex items-center justify-center rounded-full bg-[#f7b267] px-5 py-2.5 text-sm font-semibold text-[#1f1a17] shadow-[0_12px_24px_rgba(247,178,103,0.35)] transition hover:bg-[#f29f4b] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex cursor-pointer items-center justify-center rounded-full bg-[#f7b267] px-5 py-2.5 text-sm font-semibold text-[#1f1a17] shadow-[0_12px_24px_rgba(247,178,103,0.35)] transition hover:bg-[#f29f4b] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isTranscribing ? "Transcribing..." : "Open feedback"}
                     </button>

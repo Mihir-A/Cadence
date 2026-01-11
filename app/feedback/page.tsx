@@ -343,7 +343,7 @@ export default function FeedbackPage() {
                     setDownloadUrl(null);
                     void clearRecording().catch(() => {});
                   }}
-                  className="inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-700 transition hover:border-red-300 hover:text-red-800"
+                  className="inline-flex cursor-pointer items-center justify-center rounded-full border border-red-200 bg-red-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-700 transition hover:border-red-300 hover:text-red-800"
                 >
                   Delete clip
                 </button>
@@ -367,7 +367,7 @@ export default function FeedbackPage() {
                     }
                     router.push("/");
                   }}
-                  className="inline-flex items-center justify-center rounded-full border border-black/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black/60 transition hover:border-black/30 hover:text-black"
+                  className="inline-flex cursor-pointer items-center justify-center rounded-full border border-black/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black/60 transition hover:border-black/30 hover:text-black"
                 >
                   Retry this question
                 </button>
@@ -402,9 +402,25 @@ export default function FeedbackPage() {
             id="history"
             className="space-y-4 rounded-3xl border border-black/10 bg-white/80 p-6 shadow-[0_20px_50px_rgba(15,12,10,0.12)] backdrop-blur"
           >
-            <p className="text-xs uppercase tracking-[0.25em] text-black/50">
-              History
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs uppercase tracking-[0.25em] text-black/50">
+                History
+              </p>
+              {history.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      window.localStorage.removeItem(HISTORY_KEY);
+                    }
+                    setHistory([]);
+                  }}
+                  className="inline-flex cursor-pointer items-center justify-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-red-700 transition hover:border-red-300 hover:text-red-800"
+                >
+                  Delete history
+                </button>
+              ) : null}
+            </div>
             {history.length === 0 ? (
               <p className="text-sm text-black/50">
                 No past sessions saved yet.
