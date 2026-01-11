@@ -14,8 +14,8 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Confidence AI | Interview Practice Recorder",
-  description: "Record a focused 45-second interview response and review it.",
+  title: "Cadence | Interview Practice Recorder",
+  description: "Cadence helps you record a focused interview response and review it.",
 };
 
 export default function RootLayout({

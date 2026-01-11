@@ -2,6 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  clearRecording,
+  loadRecording,
+  saveRecording,
+} from "./lib/recordingStorage";
 import questionsData from "./data/questions.json";
 
 const DURATION_OPTIONS = [
@@ -53,6 +58,10 @@ const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
 
 const VIDEO_BITS_PER_SECOND = 450_000;
 const AUDIO_BITS_PER_SECOND = 48_000;
+const RETRY_QUESTION_KEY = "retryQuestion";
+const RETRY_CATEGORY_KEY = "retryCategory";
+const LAST_QUESTION_KEY = "latestQuestion";
+const LAST_CATEGORY_KEY = "latestQuestionCategory";
 
 const formatTime = (totalSeconds: number) => {
   const minutes = Math.floor(totalSeconds / 60);
@@ -104,11 +113,67 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const retryQuestion = window.sessionStorage.getItem(RETRY_QUESTION_KEY);
+    const retryCategory = window.sessionStorage.getItem(RETRY_CATEGORY_KEY);
+    if (!retryQuestion) {
+      return;
+    }
+    if (retryCategory) {
+      setSelectedType(retryCategory);
+      return;
+    }
+    const match = QUESTION_BANK.find((set) =>
+      set.questions.includes(retryQuestion),
+    );
+    if (match) {
+      setSelectedType(match.category);
+    }
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    loadRecording()
+      .then((stored) => {
+        if (!isActive || !stored) {
+          return;
+        }
+        recordedBlobRef.current = stored;
+        setVideoUrl((current) =>
+          current ? current : URL.createObjectURL(stored),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const nextSet = QUESTION_BANK.find(
       (set) => set.category === selectedType,
     );
     if (!nextSet) {
       return;
+    }
+    if (typeof window !== "undefined") {
+      const retryQuestion = window.sessionStorage.getItem(RETRY_QUESTION_KEY);
+      const retryCategory = window.sessionStorage.getItem(RETRY_CATEGORY_KEY);
+      if (
+        retryQuestion &&
+        (!retryCategory || retryCategory === selectedType)
+      ) {
+        const remaining = nextSet.questions.filter(
+          (question) => question !== retryQuestion,
+        );
+        setQuestions([retryQuestion, ...shuffleArray(remaining)]);
+        setQuestionIndex(0);
+        window.sessionStorage.removeItem(RETRY_QUESTION_KEY);
+        window.sessionStorage.removeItem(RETRY_CATEGORY_KEY);
+        return;
+      }
     }
     setQuestions(shuffleArray(nextSet.questions));
     setQuestionIndex(0);
@@ -196,6 +261,7 @@ export default function Home() {
     clearTimer();
     chunksRef.current = [];
     recordedBlobRef.current = null;
+    void clearRecording().catch(() => {});
     setIsRecording(false);
     setTimeLeft(selectedDuration);
     setError(null);
@@ -279,9 +345,25 @@ export default function Home() {
   };
 
   const transcribeRecording = async () => {
-    if (!recordedBlobRef.current) {
+    let recording = recordedBlobRef.current;
+    if (!recording) {
+      recording = await loadRecording().catch(() => null);
+      if (recording) {
+        recordedBlobRef.current = recording;
+        setVideoUrl((current) =>
+          current ? current : URL.createObjectURL(recording),
+        );
+      }
+    }
+
+    if (!recording) {
       setTranscriptError("Record a response before requesting feedback.");
       return;
+    }
+
+    if (typeof window !== "undefined" && questionCount > 0) {
+      window.sessionStorage.setItem(LAST_QUESTION_KEY, currentQuestion);
+      window.sessionStorage.setItem(LAST_CATEGORY_KEY, selectedType);
     }
 
     setIsTranscribing(true);
@@ -293,7 +375,7 @@ export default function Home() {
     setFeedbackStatus("loading");
 
     try {
-      const file = recordedBlobRef.current;
+      const file = recording;
       const transcribeForm = new FormData();
       transcribeForm.append("file", file, "interview-practice.webm");
       transcribeForm.append("question", currentQuestion);
@@ -332,6 +414,27 @@ export default function Home() {
             : "No transcript returned.";
         if (typeof window !== "undefined") {
           window.sessionStorage.setItem("latestTranscript", transcript);
+          const pauseCount =
+            typeof transcribeResult?.pause_count === "number"
+              ? transcribeResult.pause_count
+              : null;
+          const fillerCount =
+            typeof transcribeResult?.filler_word_count === "number"
+              ? transcribeResult.filler_word_count
+              : null;
+          if (pauseCount !== null || fillerCount !== null) {
+            window.sessionStorage.setItem(
+              "latestTranscriptStats",
+              JSON.stringify(
+                {
+                  pause_count: pauseCount ?? 0,
+                  filler_word_count: fillerCount ?? 0,
+                },
+                null,
+                2,
+              ),
+            );
+          }
           if (typeof transcribeResult?.raw === "string") {
             window.sessionStorage.setItem(
               "latestGeminiRaw",
@@ -481,6 +584,7 @@ export default function Home() {
           recordedBlobRef.current = recordedBlob;
           const nextUrl = URL.createObjectURL(recordedBlob);
           setVideoUrl(nextUrl);
+          void saveRecording(recordedBlob).catch(() => {});
         }
       };
 
@@ -537,10 +641,10 @@ export default function Home() {
         <main className="relative mx-auto flex min-h-screen max-w-6xl flex-col items-start justify-center gap-12 px-6 py-16 lg:flex-row lg:items-center lg:gap-16">
           <section className="max-w-xl space-y-6">
             <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium uppercase tracking-[0.2em] text-black/60">
-              Practice Mode
+              Cadence Practice Mode
             </span>
             <h1 className="text-4xl font-semibold tracking-tight text-[#1d1612] sm:text-5xl">
-              Timed interview sprints, built for focus.
+              Cadence: timed interview sprints, built for focus.
             </h1>
             <p className="text-lg leading-relaxed text-black/70">
               Pick a format, answer a prompt, and record a focused response

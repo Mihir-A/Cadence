@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { clearRecording, loadRecording } from "../lib/recordingStorage";
 
 export default function FeedbackPage() {
   const [transcript, setTranscript] = useState("");
@@ -9,6 +11,11 @@ export default function FeedbackPage() {
   const [technical, setTechnical] = useState("");
   const [geminiRaw, setGeminiRaw] = useState("");
   const [feedbackRaw, setFeedbackRaw] = useState("");
+  const [transcriptStats, setTranscriptStats] = useState("");
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [latestQuestion, setLatestQuestion] = useState("");
+  const [latestCategory, setLatestCategory] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -19,6 +26,31 @@ export default function FeedbackPage() {
     setTechnical(window.sessionStorage.getItem("latestTechnical") ?? "");
     setGeminiRaw(window.sessionStorage.getItem("latestGeminiRaw") ?? "");
     setFeedbackRaw(window.sessionStorage.getItem("latestFeedbackRaw") ?? "");
+    setTranscriptStats(
+      window.sessionStorage.getItem("latestTranscriptStats") ?? "",
+    );
+    setLatestQuestion(window.sessionStorage.getItem("latestQuestion") ?? "");
+    setLatestCategory(
+      window.sessionStorage.getItem("latestQuestionCategory") ?? "",
+    );
+  }, []);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    loadRecording()
+      .then((stored) => {
+        if (!stored) {
+          return;
+        }
+        objectUrl = URL.createObjectURL(stored);
+        setDownloadUrl(objectUrl);
+      })
+      .catch(() => {});
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
   }, []);
 
   const parseJson = (value: string) => {
@@ -37,9 +69,38 @@ export default function FeedbackPage() {
     | string
     | null;
   const feedbackParsed = parseJson(feedback) as
-    | { confidence_score?: number; confidence_feedback?: string[] }
+    | {
+        confidence_score?: number;
+        pause_count?: number;
+        filler_word_count?: number;
+        confidence_feedback?: string[];
+      }
     | string
     | null;
+  const transcriptStatsParsed = parseJson(transcriptStats) as
+    | { pause_count?: number; filler_word_count?: number }
+    | string
+    | null;
+  const feedbackMetrics =
+    typeof feedbackParsed === "object" && feedbackParsed !== null
+      ? feedbackParsed
+      : null;
+  const transcriptMetrics =
+    typeof transcriptStatsParsed === "object" && transcriptStatsParsed !== null
+      ? transcriptStatsParsed
+      : null;
+  const pauseCount =
+    transcriptMetrics?.pause_count ?? feedbackMetrics?.pause_count;
+  const fillerCount =
+    transcriptMetrics?.filler_word_count ?? feedbackMetrics?.filler_word_count;
+  const adjustedConfidenceScore =
+    typeof feedbackMetrics?.confidence_score === "number"
+      ? Math.max(
+          1,
+          feedbackMetrics.confidence_score -
+            Math.floor(((pauseCount ?? 0) + (fillerCount ?? 0)) / 2),
+        )
+      : undefined;
 
   const renderScoreBar = (value: number | undefined) => {
     const clamped = Math.max(0, Math.min(10, value ?? 0));
@@ -63,6 +124,17 @@ export default function FeedbackPage() {
     );
   };
 
+  const renderCountPill = (label: string, value: number | undefined) => (
+    <div className="flex items-center justify-between gap-3 rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium text-black/60">
+      <span className="text-[11px] uppercase tracking-[0.18em] text-black/50">
+        {label}
+      </span>
+      <span className="text-sm font-semibold text-black/70">
+        {typeof value === "number" ? value : "N/A"}
+      </span>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-[#f6efe6] text-[#1f1a17]">
       <div className="relative overflow-hidden">
@@ -73,13 +145,13 @@ export default function FeedbackPage() {
         <main className="relative mx-auto flex min-h-screen w-full max-w-3xl flex-col justify-center gap-6 px-6 py-16">
           <div className="space-y-2">
             <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs font-medium uppercase tracking-[0.2em] text-black/60">
-              Feedback
+              Cadence Feedback
             </span>
             <h1 className="text-3xl font-semibold tracking-tight text-[#1d1612] sm:text-4xl">
-              Transcript
+              Cadence transcript review
             </h1>
             <p className="text-sm text-black/60">
-              Review the transcription and iterate on your response.
+              Review the transcription and iterate with Cadence.
             </p>
           </div>
 
@@ -138,16 +210,17 @@ export default function FeedbackPage() {
                   Confidence evaluation
                 </p>
                 <div className="mt-4 space-y-4 text-sm text-black/80">
-                  {renderScoreBar(
-                    typeof feedbackParsed === "object" &&
-                      feedbackParsed !== null
-                      ? feedbackParsed.confidence_score
-                      : undefined,
-                  )}
+                  {renderScoreBar(adjustedConfidenceScore)}
+                  <div className="flex flex-wrap gap-2">
+                    {renderCountPill("Long pauses", pauseCount)}
+                    {renderCountPill(
+                      "Filler words",
+                      fillerCount,
+                    )}
+                  </div>
                   <div className="space-y-2 text-sm">
-                    {(typeof feedbackParsed === "object" &&
-                    feedbackParsed?.confidence_feedback?.length
-                      ? feedbackParsed.confidence_feedback
+                    {(feedbackMetrics?.confidence_feedback?.length
+                      ? feedbackMetrics.confidence_feedback
                       : [])
                       .slice(0, 2)
                       .map((item, index) => (
@@ -176,6 +249,85 @@ export default function FeedbackPage() {
 
           <div className="space-y-4 rounded-3xl border border-black/10 bg-white/80 p-6 shadow-[0_20px_50px_rgba(15,12,10,0.12)] backdrop-blur">
             <p className="text-xs uppercase tracking-[0.25em] text-black/50">
+              Session actions
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {downloadUrl ? (
+                <a
+                  href={downloadUrl}
+                  download="interview-practice.webm"
+                  className="inline-flex items-center justify-center rounded-full border border-black/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black/60 transition hover:border-black/30 hover:text-black"
+                >
+                  Download clip
+                </a>
+              ) : null}
+              {downloadUrl ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (downloadUrl) {
+                      URL.revokeObjectURL(downloadUrl);
+                    }
+                    setDownloadUrl(null);
+                    void clearRecording().catch(() => {});
+                  }}
+                  className="inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-700 transition hover:border-red-300 hover:text-red-800"
+                >
+                  Delete clip
+                </button>
+              ) : null}
+              {latestQuestion ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window === "undefined") {
+                      return;
+                    }
+                    window.sessionStorage.setItem(
+                      "retryQuestion",
+                      latestQuestion,
+                    );
+                    if (latestCategory) {
+                      window.sessionStorage.setItem(
+                        "retryCategory",
+                        latestCategory,
+                      );
+                    }
+                    router.push("/");
+                  }}
+                  className="inline-flex items-center justify-center rounded-full border border-black/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black/60 transition hover:border-black/30 hover:text-black"
+                >
+                  Retry this question
+                </button>
+              ) : null}
+              <Link
+                href="/"
+                className="inline-flex items-center justify-center rounded-full border border-black/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black/60 transition hover:border-black/30 hover:text-black"
+              >
+                Back to Cadence recorder
+              </Link>
+            </div>
+            <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-black/40">
+                Clip preview
+              </p>
+              {downloadUrl ? (
+                <video
+                  src={downloadUrl}
+                  className="mt-3 h-auto w-full rounded-2xl border border-black/5 bg-black/90"
+                  controls
+                  playsInline
+                />
+              ) : (
+                <p className="mt-3 text-sm text-black/50">
+                  No clip available to preview.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4 rounded-3xl border border-black/10 bg-white/80 p-6 shadow-[0_20px_50px_rgba(15,12,10,0.12)] backdrop-blur">
+            <p className="text-xs uppercase tracking-[0.25em] text-black/50">
               Raw responses (debug)
             </p>
             <div className="space-y-3 text-xs text-black/70">
@@ -196,12 +348,6 @@ export default function FeedbackPage() {
                 </pre>
               </div>
             </div>
-            <Link
-              href="/"
-              className="inline-flex items-center justify-center rounded-full border border-black/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black/60 transition hover:border-black/30 hover:text-black"
-            >
-              Back to recorder
-            </Link>
           </div>
         </main>
       </div>

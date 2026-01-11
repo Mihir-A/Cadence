@@ -1,5 +1,6 @@
 import { Buffer } from "buffer";
 import { NextRequest } from "next/server";
+import { isAiCallsDisabled } from "../../lib/aiConfig";
 
 const PLACEHOLDER_TRANSCRIPT =
   "Temp response: [PAUSE] umm I think that [FILLER] the key to success is uh hard work and dedication [PAUSE] you know like setting goals and staying focused [FILLER] yeah.";
@@ -23,7 +24,29 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/${GEMINI_API_VERSI
   GEMINI_MODEL,
 )}:generateContent`;
 
+const countToken = (text: string, token: string) =>
+  text.split(token).length - 1;
+
+const getTranscriptCounts = (text: string) => ({
+  pause_count: countToken(text, "[PAUSE]"),
+  filler_word_count:
+    countToken(text, "[FILLER]") + countToken(text, "[FILTER]"),
+});
+
 export async function POST(request: NextRequest) {
+  if (isAiCallsDisabled()) {
+    console.info(
+      "Cadence: AI calls disabled; returning placeholder transcript.",
+    );
+    const placeholderCounts = getTranscriptCounts(PLACEHOLDER_TRANSCRIPT);
+    return Response.json({
+      transcript: PLACEHOLDER_TRANSCRIPT,
+      ...placeholderCounts,
+      technical: PLACEHOLDER_TECHNICAL,
+      raw: "placeholder",
+    });
+  }
+
   const formData = await request.formData();
   const file = formData.get("file");
   const question =
@@ -39,9 +62,11 @@ export async function POST(request: NextRequest) {
   }
 
   if (TRANSCRIBE_MODE === "placeholder") {
+    const placeholderCounts = getTranscriptCounts(PLACEHOLDER_TRANSCRIPT);
     void file;
     return Response.json({
       transcript: PLACEHOLDER_TRANSCRIPT,
+      ...placeholderCounts,
       technical: PLACEHOLDER_TECHNICAL,
       raw: "placeholder",
     });
@@ -175,6 +200,7 @@ Be objective, concise, and professional. Do not include any text outside of the 
   const record = parsed as Record<string, unknown>;
   const transcript =
     typeof record.transcript === "string" ? record.transcript : "";
+  const transcriptCounts = getTranscriptCounts(transcript);
   const technical_score =
     typeof record.technical_score === "number"
       ? record.technical_score
@@ -192,6 +218,7 @@ Be objective, concise, and professional. Do not include any text outside of the 
 
   return Response.json({
     transcript,
+    ...transcriptCounts,
     technical: {
       technical_score,
       technical_feedback,

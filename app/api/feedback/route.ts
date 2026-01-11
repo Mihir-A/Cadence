@@ -1,8 +1,7 @@
 import { TwelveLabs } from "twelvelabs-js";
 import crypto from "crypto";
-import fs from "fs";
-import path from "path";
 import { NextResponse } from "next/server";
+import { isAiCallsDisabled } from "../../lib/aiConfig";
 
 const FEEDBACK_MODE = process.env.FEEDBACK_MODE ?? "12labs";
 const MAX_UPLOAD_MB = Number(process.env.TWELVELABS_MAX_UPLOAD_MB ?? "20");
@@ -16,6 +15,16 @@ const INDEX_POLL_LIMIT = Number(
   process.env.TWELVELABS_INDEX_POLL_LIMIT ?? "45",
 );
 
+const PLACEHOLDER_FEEDBACK = {
+  confidence_score: 7,
+  pause_count: 3,
+  filler_word_count: 6,
+  confidence_feedback: [
+    "Maintain steadier pacing to project confidence.",
+    "Reduce filler words to improve clarity.",
+  ],
+};
+
 const FEEDBACK_PROMPT = `You are analyzing a candidate's interview performance from video (and audio).
 
 Evaluate the candidate's delivery, confidence, and communication:
@@ -24,11 +33,14 @@ Evaluate the candidate's delivery, confidence, and communication:
 - Consider eye contact, nervous behaviors, pacing, and filler words (e.g., "um", "uh", "like").
 - Score from 0 to 10 (NO DECIMALS)
 - Provide exactly TWO concise feedback points mentioning nervous behaviors and clarity of speech.
+- Count pauses (noticeable silent hesitations) and filler words (e.g., "um", "uh", "like", "you know").
 
 Return ONLY a JSON object in this format:
 
 {
   "confidence_score": integer,
+  "pause_count": integer,
+  "filler_word_count": integer,
   "confidence_feedback": [
     "string",
     "string"
@@ -41,9 +53,17 @@ Strict rules:
 - Do not add any extra text before or after the JSON.`;
 
 export async function POST(request: Request) {
-  let filePath: string | null = null;
-
   try {
+    if (isAiCallsDisabled()) {
+      console.info(
+        "Cadence: AI calls disabled; returning placeholder feedback.",
+      );
+      return NextResponse.json({
+        feedback: PLACEHOLDER_FEEDBACK,
+        raw: "placeholder",
+      });
+    }
+
     if (FEEDBACK_MODE !== "12labs") {
       return NextResponse.json(
         { error: "Feedback mode is disabled. Set FEEDBACK_MODE=12labs." },
@@ -80,11 +100,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    filePath = path.join(process.cwd(), `${crypto.randomUUID()}.webm`);
-    fs.writeFileSync(filePath, buffer);
-
     let indexId = INDEX_ID;
     if (!indexId) {
       const index = await client.indexes.create({
@@ -102,7 +117,8 @@ export async function POST(request: Request) {
 
     const asset = await client.assets.create({
       method: "direct",
-      file: fs.createReadStream(filePath),
+      file,
+      filename: file.name || "upload.webm",
     });
 
     if (!asset.id) {
@@ -201,9 +217,5 @@ export async function POST(request: Request) {
     const message =
       err instanceof Error ? err.message : "Feedback request failed.";
     return NextResponse.json({ error: message }, { status: 500 });
-  } finally {
-    if (filePath && fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
   }
 }
