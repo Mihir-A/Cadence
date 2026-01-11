@@ -103,6 +103,7 @@ export default function FeedbackPage() {
         confidence_score?: number;
         pause_count?: number;
         filler_word_count?: number;
+        visual_feedback?: string;
         confidence_feedback?: string[];
       }
     | string
@@ -131,6 +132,22 @@ export default function FeedbackPage() {
             Math.floor(((pauseCount ?? 0) + (fillerCount ?? 0)) / 2),
         )
       : undefined;
+  const visualFeedback =
+    typeof feedbackMetrics?.visual_feedback === "string"
+      ? feedbackMetrics.visual_feedback
+      : feedbackMetrics?.confidence_feedback?.[0];
+  const fillerFeedback =
+    typeof fillerCount === "number"
+      ? fillerCount === 0
+        ? "Excellent filler control. Your delivery stays crisp."
+        : fillerCount < 4
+          ? "A few filler words appear. Slow down to tighten delivery."
+          : "Frequent filler words reduce clarity. Pause instead of filling."
+      : null;
+  const confidenceFeedbackItems = [
+    visualFeedback,
+    fillerFeedback,
+  ].filter((item): item is string => Boolean(item));
 
   const chartEntries = history.slice(-HISTORY_CHART_LIMIT);
   const normalizeScore = (value: number | null | undefined) =>
@@ -156,6 +173,7 @@ export default function FeedbackPage() {
       entry.confidence_score - Math.floor((pause + filler) / 2),
     );
   };
+  const isDev = process.env.NODE_ENV === "development";
 
   const renderScoreBar = (value: number | undefined) => {
     const clamped = Math.max(0, Math.min(10, value ?? 0));
@@ -275,9 +293,7 @@ export default function FeedbackPage() {
                     )}
                   </div>
                   <div className="space-y-2 text-sm">
-                    {(feedbackMetrics?.confidence_feedback?.length
-                      ? feedbackMetrics.confidence_feedback
-                      : [])
+                    {confidenceFeedbackItems
                       .slice(0, 2)
                       .map((item, index) => (
                         <p
@@ -482,29 +498,31 @@ export default function FeedbackPage() {
             ) : null}
           </div>
 
-          <div className="space-y-4 rounded-3xl border border-black/10 bg-white/80 p-6 shadow-[0_20px_50px_rgba(15,12,10,0.12)] backdrop-blur">
-            <p className="text-xs uppercase tracking-[0.25em] text-black/50">
-              Raw responses (debug)
-            </p>
-            <div className="space-y-3 text-xs text-black/70">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-black/40">
-                  Gemini raw
-                </p>
-                <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-black/5 bg-white/70 p-3">
-                  {geminiRaw || "No raw Gemini response stored."}
-                </pre>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-black/40">
-                  12Labs raw
-                </p>
-                <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-black/5 bg-white/70 p-3">
-                  {feedbackRaw || "No raw 12Labs response stored."}
-                </pre>
+          {isDev ? (
+            <div className="space-y-4 rounded-3xl border border-black/10 bg-white/80 p-6 shadow-[0_20px_50px_rgba(15,12,10,0.12)] backdrop-blur">
+              <p className="text-xs uppercase tracking-[0.25em] text-black/50">
+                Raw responses (debug)
+              </p>
+              <div className="space-y-3 text-xs text-black/70">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-black/40">
+                    Gemini raw
+                  </p>
+                  <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-black/5 bg-white/70 p-3">
+                    {geminiRaw || "No raw Gemini response stored."}
+                  </pre>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-black/40">
+                    12Labs raw
+                  </p>
+                  <pre className="mt-2 max-h-56 overflow-auto rounded-2xl border border-black/5 bg-white/70 p-3">
+                    {feedbackRaw || "No raw 12Labs response stored."}
+                  </pre>
+                </div>
               </div>
             </div>
-          </div>
+          ) : null}
         </main>
       </div>
     </div>

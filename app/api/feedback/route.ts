@@ -17,12 +17,8 @@ const INDEX_POLL_LIMIT = Number(
 
 const PLACEHOLDER_FEEDBACK = {
   confidence_score: 7,
-  pause_count: 3,
-  filler_word_count: 6,
-  confidence_feedback: [
-    "Maintain steadier pacing to project confidence.",
-    "Reduce filler words to improve clarity.",
-  ],
+  visual_feedback:
+    "Your gaze drifts off-camera at times; aim to keep steadier eye contact.",
 };
 
 const FEEDBACK_PROMPT = `You are analyzing a candidate's interview performance from video (and audio).
@@ -30,21 +26,15 @@ const FEEDBACK_PROMPT = `You are analyzing a candidate's interview performance f
 Evaluate the candidate's delivery, confidence, and communication:
 
 1) Confidence & Delivery
-- Consider eye contact, nervous behaviors, pacing, and filler words (e.g., "um", "uh", "like").
+- Consider eye contact, hand movement, posture, and other visible cues.
 - Score from 0 to 10 (NO DECIMALS) where a 10 means very confident and clear with NO ISSUES, and a 0 means very nervous and unclear.
-- Provide exactly TWO concise feedback points mentioning nervous behaviors and clarity of speech.
-- Count pauses (noticeable silent hesitations) and filler words (e.g., "um", "uh", "like", "you know").
+- Provide exactly ONE concise feedback point about visible cues only (gaze, hands, posture).
 
 Return ONLY a JSON object in this format:
 
 {
   "confidence_score": integer,
-  "pause_count": integer,
-  "filler_word_count": integer,
-  "confidence_feedback": [
-    "string",
-    "string"
-  ]
+  "visual_feedback": "string"
 }
 
 Strict rules:
