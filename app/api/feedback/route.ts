@@ -31,7 +31,7 @@ Evaluate the candidate's delivery, confidence, and communication:
 
 1) Confidence & Delivery
 - Consider eye contact, nervous behaviors, pacing, and filler words (e.g., "um", "uh", "like").
-- Score from 0 to 10 (NO DECIMALS)
+- Score from 0 to 10 (NO DECIMALS) where a 10 means very confident and clear with NO ISSUES, and a 0 means very nervous and unclear.
 - Provide exactly TWO concise feedback points mentioning nervous behaviors and clarity of speech.
 - Count pauses (noticeable silent hesitations) and filler words (e.g., "um", "uh", "like", "you know").
 

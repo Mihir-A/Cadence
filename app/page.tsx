@@ -25,6 +25,7 @@ type StepStatus = "idle" | "loading" | "success" | "error";
 const QUESTION_BANK: QuestionCategory[] = questionsData.question_bank ?? [];
 const DEFAULT_CATEGORY = QUESTION_BANK[0]?.category ?? "General";
 const DEFAULT_QUESTIONS = QUESTION_BANK[0]?.questions ?? [];
+const CUSTOM_CATEGORY = "Custom";
 
 const shuffleArray = (items: string[]) => {
   const copy = [...items];
@@ -91,6 +92,7 @@ export default function Home() {
   const [questions, setQuestions] = useState<string[]>(
     DEFAULT_QUESTIONS,
   );
+  const [customQuestion, setCustomQuestion] = useState("");
   const [questionIndex, setQuestionIndex] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
@@ -121,6 +123,11 @@ export default function Home() {
     if (!retryQuestion) {
       return;
     }
+    if (retryCategory === CUSTOM_CATEGORY) {
+      setSelectedType(CUSTOM_CATEGORY);
+      setCustomQuestion(retryQuestion);
+      return;
+    }
     if (retryCategory) {
       setSelectedType(retryCategory);
       return;
@@ -130,7 +137,10 @@ export default function Home() {
     );
     if (match) {
       setSelectedType(match.category);
+      return;
     }
+    setSelectedType(CUSTOM_CATEGORY);
+    setCustomQuestion(retryQuestion);
   }, []);
 
   useEffect(() => {
@@ -152,6 +162,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (selectedType === CUSTOM_CATEGORY) {
+      const trimmedCustomQuestion = customQuestion.trim();
+      setQuestions(trimmedCustomQuestion ? [trimmedCustomQuestion] : []);
+      setQuestionIndex(0);
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem(RETRY_QUESTION_KEY);
+        window.sessionStorage.removeItem(RETRY_CATEGORY_KEY);
+      }
+      return;
+    }
     const nextSet = QUESTION_BANK.find(
       (set) => set.category === selectedType,
     );
@@ -177,7 +197,7 @@ export default function Home() {
     }
     setQuestions(shuffleArray(nextSet.questions));
     setQuestionIndex(0);
-  }, [selectedType]);
+  }, [customQuestion, selectedType]);
 
   useEffect(() => {
     if (!isRecording) {
@@ -191,9 +211,16 @@ export default function Home() {
     }
   }, [isPreviewing, isRecording]);
 
-  const currentQuestion =
-    questions[questionIndex] ?? "Pick an interview type to begin.";
-  const questionCount = questions.length;
+  const isCustom = selectedType === CUSTOM_CATEGORY;
+  const trimmedCustomQuestion = customQuestion.trim();
+  const currentQuestion = isCustom
+    ? trimmedCustomQuestion || "Enter a custom question to continue."
+    : questions[questionIndex] ?? "Pick an interview type to begin.";
+  const questionCount = isCustom
+    ? trimmedCustomQuestion
+      ? 1
+      : 0
+    : questions.length;
   const durationLabel =
     DURATION_OPTIONS.find((option) => option.seconds === selectedDuration)
       ?.label ?? `${selectedDuration}s`;
@@ -345,6 +372,11 @@ export default function Home() {
   };
 
   const transcribeRecording = async () => {
+    if (isCustom && !trimmedCustomQuestion) {
+      setTranscriptError("Enter a custom question before requesting feedback.");
+      return;
+    }
+
     let recording = recordedBlobRef.current;
     if (!recording) {
       recording = await loadRecording().catch(() => null);
@@ -687,6 +719,7 @@ export default function Home() {
                         {set.category}
                       </option>
                     ))}
+                    <option value={CUSTOM_CATEGORY}>Custom</option>
                   </select>
                 </div>
                 <div className="min-w-[140px]">
@@ -714,22 +747,42 @@ export default function Home() {
                 <div className="flex items-center justify-between text-xs text-black/50">
                   <span className="uppercase tracking-[0.25em]">Question</span>
                   <span className="uppercase tracking-[0.2em]">
-                    {questionCount
-                      ? `${questionIndex + 1} of ${questionCount}`
-                      : "0 of 0"}
+                    {isCustom
+                      ? "Custom"
+                      : questionCount
+                        ? `${questionIndex + 1} of ${questionCount}`
+                        : "0 of 0"}
                   </span>
                 </div>
-                <p className="mt-3 text-base font-medium text-black/80">
-                  {currentQuestion}
-                </p>
-                <button
-                  type="button"
-                  onClick={goToNextQuestion}
-                  disabled={isRecording || questionCount === 0}
-                  className="mt-4 inline-flex items-center justify-center rounded-full border border-black/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black/60 transition hover:border-black/30 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Next question
-                </button>
+                {isCustom ? (
+                  <div className="mt-3 space-y-2">
+                    <label className="text-xs uppercase tracking-[0.25em] text-black/50">
+                      Custom prompt
+                    </label>
+                    <textarea
+                      value={customQuestion}
+                      onChange={(event) => setCustomQuestion(event.target.value)}
+                      disabled={isRecording}
+                      placeholder="Type your interview question."
+                      rows={3}
+                      className="w-full resize-none rounded-2xl border border-black/15 bg-white/80 px-3 py-2 text-sm text-black/80 shadow-sm outline-none transition focus:border-black/40 disabled:cursor-not-allowed disabled:bg-black/5"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <p className="mt-3 text-base font-medium text-black/80">
+                      {currentQuestion}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={goToNextQuestion}
+                      disabled={isRecording || questionCount === 0}
+                      className="mt-4 inline-flex items-center justify-center rounded-full border border-black/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black/60 transition hover:border-black/30 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Next question
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </section>

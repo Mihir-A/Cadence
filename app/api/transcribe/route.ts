@@ -88,12 +88,12 @@ export async function POST(request: NextRequest) {
 The interview question asked is:
 "${question}"
 
-First, transcribe the audio exactly. Show a large pause with [PAUSE], and filler words (like, uhh, umm, ehh, uhh, etc.) [FILLER].
+First, transcribe the audio exactly, HOWEVER Show a large pause with [PAUSE], and REPLACE filler words {like, uhh, umm, ehh, uhh, etc.} with [FILLER].
 
 Then, based on the response, evaluate:
 
 1) Technical correctness: how well did the candidate answer the question conceptually? Ignore delivery, confidence, or nervousness.
-- Score from 0 to 10 (NO DECIMALS)
+- Score from 0 to 10 (NO DECIMALS) where a 10 means a perfect, complete answer and a 0 means no understanding of the concept.
 - Give exactly TWO concise feedback points focusing on the key concepts.
 
 Return ONLY a JSON object in this format:
