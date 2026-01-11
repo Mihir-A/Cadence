@@ -5,7 +5,12 @@
       "questions": [
         "What is the time complexity of binary search, and why?",
         "What problem does a hash table solve, and what’s a common tradeoff?",
-        "What’s the difference between a process and a thread?"
+        "What’s the difference between a process and a thread?",
+        "Explain the difference between synchronous and asynchronous programming.",
+        "What are design patterns and why are they useful?",
+        "How do you handle memory leaks in your applications?",
+        "What is a race condition and how can it be prevented?",
+        "Explain the difference between REST and GraphQL APIs."
       ]
     },
     {
@@ -13,7 +18,12 @@
       "questions": [
         "What does expected value represent in probability?",
         "Why might a model overfit financial data?",
-        "What is volatility, conceptually?"
+        "What is volatility, conceptually?",
+        "Explain the difference between systematic and unsystematic risk.",
+        "What is the CAPM model and what does beta represent?",
+        "How does compounding affect investment returns over time?",
+        "What is Value at Risk (VaR) and how is it used?",
+        "Explain the difference between European and American options."
       ]
     },
     {
@@ -21,7 +31,12 @@
       "questions": [
         "What metric would you use to evaluate a new feature?",
         "What’s the difference between a user need and a feature?",
-        "How would you detect a broken funnel?"
+        "How would you detect a broken funnel?",
+        "How do you prioritize product features?",
+        "Describe a time you had to make a tradeoff between speed and quality.",
+        "What is an MVP and how do you define it?",
+        "How do you measure product-market fit?",
+        "Explain how you would gather feedback from users for a new feature."
       ]
     },
     {
@@ -29,7 +44,12 @@
       "questions": [
         "What are the main drivers of revenue for a company?",
         "How would you structure market size estimation?",
-        "What costs scale with users in a tech company?"
+        "What costs scale with users in a tech company?",
+        "How would you analyze a declining profit margin?",
+        "What frameworks would you use to evaluate a company's growth strategy?",
+        "How do you prioritize which business unit to optimize first?",
+        "Explain the difference between top-down and bottom-up analysis.",
+        "How would you approach a market entry strategy for a new product?"
       ]
     },
     {
@@ -37,7 +57,12 @@
       "questions": [
         "What is a control variable, and why is it important?",
         "What does statistical significance mean?",
-        "Why do we use baselines in experiments?"
+        "Why do we use baselines in experiments?",
+        "Explain the difference between correlation and causation.",
+        "What is the difference between qualitative and quantitative research?",
+        "How do you ensure reproducibility in your experiments?",
+        "Describe an example of a hypothesis and how you would test it.",
+        "What are Type I and Type II errors?"
       ]
     },
     {
@@ -45,7 +70,12 @@
       "questions": [
         "What’s the difference between bias and variance?",
         "What is precision vs recall?",
-        "Why is feature scaling important?"
+        "Why is feature scaling important?",
+        "Explain the difference between supervised and unsupervised learning.",
+        "What is cross-validation and why is it used?",
+        "How do you handle missing data in a dataset?",
+        "What is overfitting and how can it be prevented?",
+        "Describe the differences between decision trees and random forests."
       ]
     },
     {
@@ -53,7 +83,12 @@
       "questions": [
         "What is an affordance in design?",
         "Why are usability tests run with small sample sizes?",
-        "What does accessibility mean in UX?"
+        "What does accessibility mean in UX?",
+        "Explain the difference between UI and UX design.",
+        "How do you balance aesthetics and usability in a product?",
+        "What is a user journey map and why is it useful?",
+        "How do you measure usability success for a product?",
+        "What are some common cognitive biases that affect user behavior?"
       ]
     },
     {
@@ -61,7 +96,12 @@
       "questions": [
         "What is a competitive advantage?",
         "Why might revenue grow while profit declines?",
-        "What does unit economics mean?"
+        "What does unit economics mean?",
+        "How do you evaluate a new business opportunity?",
+        "Explain the difference between cost leadership and differentiation strategy.",
+        "What is a SWOT analysis and how is it used?",
+        "How would you assess market saturation for a product?",
+        "Describe a situation where strategic partnerships can accelerate growth."
       ]
     },
     {
@@ -69,7 +109,12 @@
       "questions": [
         "What motivates you most in your work?",
         "How do you handle ambiguity?",
-        "What does good teamwork mean to you?"
+        "What does good teamwork mean to you?",
+        "Tell me about a time you faced a conflict and how you resolved it.",
+        "Describe a situation where you took initiative to solve a problem.",
+        "How do you prioritize tasks under tight deadlines?",
+        "Give an example of a failure and what you learned from it.",
+        "How do you manage stress in high-pressure situations?"
       ]
     }
   ]
