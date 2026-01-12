@@ -39,10 +39,6 @@ Optional environment variables:
 NEXT_PUBLIC_AI_CALLS_DISABLED=false
 AI_CALLS_DISABLED=false
 FEEDBACK_MODE=12labs
-TRANSCRIBE_MODE=gemini
-TWELVELABS_INDEX_ID=your_index_id
-TWELVELABS_INDEX_NAME=interview-feedback
-TWELVELABS_MAX_UPLOAD_MB=20
 ```
 
 When `NEXT_PUBLIC_AI_CALLS_DISABLED=true` or `AI_CALLS_DISABLED=true`, Cadence returns placeholder responses and skips external API calls.
