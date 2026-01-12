@@ -38,7 +38,6 @@ Optional environment variables:
 ```
 NEXT_PUBLIC_AI_CALLS_DISABLED=false
 AI_CALLS_DISABLED=false
-FEEDBACK_MODE=12labs
 ```
 
 When `NEXT_PUBLIC_AI_CALLS_DISABLED=true` or `AI_CALLS_DISABLED=true`, Cadence returns placeholder responses and skips external API calls.
