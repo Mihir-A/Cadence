@@ -42,6 +42,7 @@ npm run build
 
 ## Configuration
 Optional environment variables:
+```
 AI_CALLS_DISABLED=false
 ```
 
