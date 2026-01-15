@@ -16,7 +16,8 @@ Cadence is a focused interview practice recorder built with Next.js + Tailwind C
 - Lets you review results, retry a question, and download or delete clips.
 
 ## Demo
-https://cadence.mihirdev.com
+- Live Site: https://cadence.mihirdev.com
+- Video Demo: https://www.youtube.com/watch?v=ujVTpeboHpI
 
 ## Getting started
 Install dependencies:
