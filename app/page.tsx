@@ -892,6 +892,7 @@ export default function Home() {
                     <video
                       ref={previewRef}
                       className="h-full w-full object-cover"
+                      style={{ transform: "scaleX(-1)" }}
                       autoPlay
                       muted
                       playsInline
@@ -901,6 +902,7 @@ export default function Home() {
                       key={videoUrl}
                       src={videoUrl}
                       className="h-full w-full object-cover"
+                      style={{ transform: "scaleX(-1)" }}
                       controls
                       playsInline
                     />
