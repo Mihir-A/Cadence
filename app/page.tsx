@@ -736,7 +736,7 @@ export default function Home() {
         <main className="relative mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl flex-col items-start justify-center gap-12 px-6 py-16 lg:flex-row lg:items-center lg:gap-16">
           <section className="max-w-xl space-y-6">
             <h1 className="text-4xl font-semibold tracking-tight text-[#1d1612] sm:text-5xl">
-              Timed interview sprints, built for focus.
+              Interview Practice, Enababling Confidence.
             </h1>
             <p className="text-lg leading-relaxed text-black/70">
               Pick a format, answer a prompt, and record a focused response
