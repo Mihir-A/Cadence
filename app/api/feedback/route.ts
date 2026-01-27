@@ -118,7 +118,7 @@ export async function POST(request: Request) {
       );
     }
 
-    let indexedAsset = await client.indexes.indexedAssets.create(indexId, {
+    const indexedAsset = await client.indexes.indexedAssets.create(indexId, {
       assetId: asset.id,
     });
 

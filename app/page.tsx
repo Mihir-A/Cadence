@@ -725,9 +725,11 @@ export default function Home() {
     };
   }, [videoUrl]);
 
+  const currentYear = new Date().getFullYear();
+
   return (
-    <div className="min-h-screen bg-[#f6efe6] text-[#1f1a17]">
-      <div className="relative overflow-hidden">
+    <div className="flex min-h-screen flex-col bg-[#f6efe6] text-[#1f1a17]">
+      <div className="relative flex-1 overflow-hidden">
         <div className="pointer-events-none absolute -top-24 right-0 h-72 w-72 rounded-full bg-[#f7b267]/40 blur-[140px]" />
         <div className="pointer-events-none absolute bottom-0 left-0 h-80 w-80 rounded-full bg-[#7fd1b9]/40 blur-[160px]" />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.8),_rgba(255,255,255,0))]" />
@@ -1063,6 +1065,53 @@ export default function Home() {
           </section>
         </main>
       </div>
+      <footer className="border-t border-black/10 bg-white/60">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-6 py-8 text-sm text-black/60 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+            <span className="uppercase tracking-[0.2em] text-black/40">
+              Built by
+            </span>
+            <a
+              href="https://mihirdev.com/"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-black/70 transition hover:text-black"
+            >
+              Mihir
+            </a>
+            <span aria-hidden="true">•</span>
+            <a
+              href="https://www.linkedin.com/in/alexander-peroulas/"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-black/70 transition hover:text-black"
+            >
+              Alex
+            </a>
+            <span aria-hidden="true">•</span>
+            <a
+              href="https://www.linkedin.com/in/carrie-ma-65a911363/"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-black/70 transition hover:text-black"
+            >
+              Carrie
+            </a>
+            <span aria-hidden="true">•</span>
+            <a
+              href="https://www.linkedin.com/in/vishwath-shankar-05540324a/"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-black/70 transition hover:text-black"
+            >
+              Vish
+            </a>
+          </div>
+          <p className="text-black/40">
+            © {currentYear} Cadence. All rights reserved.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
