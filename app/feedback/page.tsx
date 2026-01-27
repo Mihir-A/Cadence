@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import Footer from "../components/Footer";
 import Navbar from "../components/Navbar";
 import { clearRecording, loadRecording } from "../lib/recordingStorage";
 
@@ -178,7 +179,6 @@ export default function FeedbackPage() {
     );
   };
   const isDev = process.env.NODE_ENV === "development";
-  const currentYear = new Date().getFullYear();
 
   const renderScoreBar = (value: number | undefined) => {
     const clamped = Math.max(0, Math.min(10, value ?? 0));
@@ -546,53 +546,7 @@ export default function FeedbackPage() {
           ) : null}
         </main>
       </div>
-      <footer className="border-t border-black/10 bg-white/60">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-6 py-8 text-sm text-black/60 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-            <span className="uppercase tracking-[0.2em] text-black/40">
-              Built by
-            </span>
-            <a
-              href="https://mihirdev.com/"
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-black/70 transition hover:text-black"
-            >
-              Mihir
-            </a>
-            <span aria-hidden="true">•</span>
-            <a
-              href="https://www.linkedin.com/in/alexander-peroulas/"
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-black/70 transition hover:text-black"
-            >
-              Alex
-            </a>
-            <span aria-hidden="true">•</span>
-            <a
-              href="https://www.linkedin.com/in/carrie-ma-65a911363/"
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-black/70 transition hover:text-black"
-            >
-              Carrie
-            </a>
-            <span aria-hidden="true">•</span>
-            <a
-              href="https://www.linkedin.com/in/vishwath-shankar-05540324a/"
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-black/70 transition hover:text-black"
-            >
-              Vish
-            </a>
-          </div>
-          <p className="text-black/40">
-            © {currentYear} Cadence. All rights reserved.
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
