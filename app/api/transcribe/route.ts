@@ -83,37 +83,43 @@ export async function POST(request: NextRequest) {
   const arrayBuffer = await file.arrayBuffer();
   const base64Audio = Buffer.from(arrayBuffer).toString("base64");
   const mimeType = file.type || "audio/webm";
-  const prompt = `You are analyzing a candidate's interview response for technical correctness.
+  const prompt = `You are a strict evaluator of an interview response.
 
-The interview question asked is:
+Interview question:
 "${question}"
 
-First, transcribe the audio exactly, HOWEVER Show a large pause with [PAUSE], and REPLACE filler words {like, uhh, umm, ehh, uhh, etc.} with [FILLER].
+Tasks:
+1) Transcribe the audio as faithfully as possible.
+- Use [PAUSE] for long pauses (about 1.5s or more).
+- Replace filler words (um, uh, like, you know, etc.) with [FILLER].
+- Do not invent content that is not audible. If unclear, leave it out.
 
-Then, based on the response, evaluate:
+2) Score technical correctness only (ignore delivery/confidence).
+Use this rubric:
+- 0-2: No relevant answer or mostly incorrect.
+- 3-4: Vague or partially incorrect; key ideas missing.
+- 5-6: Partially correct; some key ideas present, important gaps remain.
+- 7-8: Mostly correct and relevant; minor gaps or imprecision.
+- 9-10: Complete, accurate, and well-aligned to the question.
 
-1) Technical correctness: how well did the candidate answer the question conceptually? Ignore delivery, confidence, or nervousness.
-- Score from 0 to 10 (NO DECIMALS) where a 10 means a perfect, complete answer and a 0 means no understanding of the concept.
-- Give exactly TWO concise feedback points focusing on the key concepts.
+Feedback rules:
+- Provide exactly TWO feedback points about technical content.
+- Each point must be specific and actionable.
+- Prefer the most important missing/incorrect concept first.
+- Keep each point under 18 words.
+- If the audio is unclear, say what cannot be verified.
 
-Return ONLY a JSON object in this format:
-
+Return ONLY valid JSON with this exact schema and no extra keys:
 {
   "transcript": "string",
   "technical_score": integer,
-  "technical_feedback": [
-    "string",
-    "string"
-  ]
+  "technical_feedback": ["string", "string"]
 }
 
-Strict rules:
-- Output must be valid JSON with double quotes.
-- Do not wrap in code fences.
-- Do not add any extra text before or after the JSON.
-- Escape any quotes inside the transcript string.
-
-Be objective, concise, and professional. Do not include any text outside of the JSON.`;
+Hard constraints:
+- Output JSON only (no prose, no code fences).
+- Use double quotes.
+- Escape quotes inside the transcript.`;
 
   const upstreamResponse = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
     method: "POST",

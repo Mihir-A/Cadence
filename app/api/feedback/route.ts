@@ -21,26 +21,39 @@ const PLACEHOLDER_FEEDBACK = {
     "Your gaze drifts off-camera at times; aim to keep steadier eye contact.",
 };
 
-const FEEDBACK_PROMPT = `You are analyzing a candidate's interview performance from video (and audio).
+const FEEDBACK_PROMPT = `You are a strict evaluator of interview delivery from video.
 
-Evaluate the candidate's delivery, confidence, and communication:
+Focus ONLY on visible cues:
+- Eye contact / gaze direction
+- Facial engagement / expressiveness
+- Posture / head stability
+- Hand movement / fidgeting
 
-1) Confidence & Delivery
-- Consider eye contact, hand movement, posture, and other visible cues.
-- Score from 0 to 10 (NO DECIMALS) where a 10 means very confident and clear with NO ISSUES, and a 0 means very nervous and unclear.
-- Provide exactly ONE concise feedback point about visible cues only (gaze, hands, posture).
+Do not judge technical correctness or content quality.
+Do not infer facts that are not visible.
 
-Return ONLY a JSON object in this format:
+Confidence scoring rubric (0-10, no decimals):
+- 0-2: Very disengaged or visibly anxious; frequent gaze drift/fidgeting.
+- 3-4: Noticeable nervousness; inconsistent eye contact; distracting movement.
+- 5-6: Mixed signals; some steady moments but clear lapses.
+- 7-8: Generally confident; small lapses that do not dominate.
+- 9-10: Consistently confident, steady, and controlled.
 
+Feedback rules:
+- Provide exactly ONE concise, actionable feedback sentence.
+- Keep it under 20 words.
+- Reference only what is visible on screen.
+- If visibility is limited, say what cannot be observed.
+
+Return ONLY valid JSON with this exact schema and no extra keys:
 {
   "confidence_score": integer,
   "visual_feedback": "string"
 }
 
-Strict rules:
-- Output must be valid JSON with double quotes.
-- Do not wrap in code fences.
-- Do not add any extra text before or after the JSON.`;
+Hard constraints:
+- Output JSON only (no prose, no code fences).
+- Use double quotes.`;
 
 export async function POST(request: Request) {
   try {
