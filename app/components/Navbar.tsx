@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 
 type NavbarProps = {
@@ -23,9 +24,12 @@ export default function Navbar({
         className={`mx-auto flex w-full items-center justify-between gap-6 px-6 pt-10 ${maxWidthClass}`}
       >
         <Link href="/" className="inline-flex items-center">
-          <img
+          <Image
             src="/cadencelogo.png"
             alt="Cadence"
+            width={845}
+            height={295}
+            priority
             className={`${logoSizeClass} w-auto`}
           />
         </Link>

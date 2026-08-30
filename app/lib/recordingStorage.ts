@@ -2,6 +2,11 @@ const DB_NAME = "cadence";
 const STORE_NAME = "recordings";
 const RECORDING_KEY = "latest";
 
+export const getRecordingFilename = (blob: Blob) =>
+  blob.type.includes("mp4")
+    ? "interview-practice.mp4"
+    : "interview-practice.webm";
+
 const openDb = () =>
   new Promise<IDBDatabase>((resolve, reject) => {
     if (typeof indexedDB === "undefined") {

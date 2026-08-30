@@ -50,8 +50,8 @@ export default function Footer() {
             </div>
 
             <p className="text-xs text-black/50">
-              Your camera + mic run locally in your browser. Feedback is
-              AI-generated and may be imperfect.
+              Recordings stay local until you request AI feedback. AI results
+              may be imperfect.
             </p>
           </div>
 

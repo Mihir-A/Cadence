@@ -20,6 +20,11 @@ const normalizeModel = (model: string) =>
 const GEMINI_API_VERSION = process.env.GEMINI_API_VERSION ?? "v1";
 const GEMINI_MODEL =
   process.env.GEMINI_TRANSCRIBE_MODEL ?? "gemini-2.5-flash";
+const GEMINI_TIMEOUT_MS = Number(
+  process.env.GEMINI_TRANSCRIBE_TIMEOUT_MS ?? "85000",
+);
+const MAX_UPLOAD_MB = Number(process.env.GEMINI_MAX_UPLOAD_MB ?? "20");
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/${GEMINI_API_VERSION}/${normalizeModel(
   GEMINI_MODEL,
 )}:generateContent`;
@@ -58,6 +63,16 @@ export async function POST(request: NextRequest) {
     return Response.json(
       { error: "No audio file received for transcription." },
       { status: 400 },
+    );
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return Response.json(
+      {
+        error: `Recording is too large (${Math.ceil(
+          file.size / 1024 / 1024,
+        )}MB). Max allowed is ${MAX_UPLOAD_MB}MB.`,
+      },
+      { status: 413 },
     );
   }
 
@@ -121,33 +136,59 @@ Hard constraints:
 - Use double quotes.
 - Escape quotes inside the transcript.`;
 
-  const upstreamResponse = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: prompt,
-            },
-            {
-              inlineData: {
-                mimeType,
-                data: base64Audio,
-              },
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.2,
+  const controller = new AbortController();
+  let didTimeOut = false;
+  const timeoutId = setTimeout(() => {
+    didTimeOut = true;
+    controller.abort();
+  }, GEMINI_TIMEOUT_MS);
+  const handleRequestAbort = () => controller.abort();
+  request.signal.addEventListener("abort", handleRequestAbort, { once: true });
+
+  let upstreamResponse: Response;
+  try {
+    upstreamResponse = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-    }),
-  });
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: prompt,
+              },
+              {
+                inlineData: {
+                  mimeType,
+                  data: base64Audio,
+                },
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.2,
+        },
+      }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (didTimeOut) {
+      return Response.json(
+        { error: "Transcription timed out after 85 seconds. Please try again." },
+        { status: 504 },
+      );
+    }
+    const message =
+      error instanceof Error ? error.message : "Transcription failed.";
+    return Response.json({ error: message }, { status: 502 });
+  } finally {
+    clearTimeout(timeoutId);
+    request.signal.removeEventListener("abort", handleRequestAbort);
+  }
 
   const payload = await upstreamResponse.json().catch(() => ({}));
 
@@ -196,7 +237,7 @@ Hard constraints:
   }
 
   if (!parsed || typeof parsed !== "object") {
-    console.error("Gemini response was not valid JSON:", modelText);
+    console.error("Gemini response was not valid JSON.");
     return Response.json(
       { error: "Gemini response was not valid JSON.", raw: modelText },
       { status: 502 },

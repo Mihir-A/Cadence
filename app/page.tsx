@@ -1,11 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import fixWebmDuration from "fix-webm-duration";
 import Footer from "./components/Footer";
 import Navbar from "./components/Navbar";
 import {
   clearRecording,
+  getRecordingFilename,
   loadRecording,
   saveRecording,
 } from "./lib/recordingStorage";
@@ -34,6 +36,8 @@ const pickRecorderMimeType = () => {
     return "";
   }
   const candidates = [
+    "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+    "video/mp4",
     "video/webm;codecs=vp9,opus",
     "video/webm;codecs=vp8,opus",
     "video/webm;codecs=vp9",
@@ -58,6 +62,29 @@ const LAST_QUESTION_KEY = "latestQuestion";
 const LAST_CATEGORY_KEY = "latestQuestionCategory";
 const HISTORY_KEY = "cadenceHistory";
 const HISTORY_LIMIT = 20;
+const TRANSCRIBE_REQUEST_TIMEOUT_MS = 90_000;
+const FEEDBACK_REQUEST_TIMEOUT_MS = 140_000;
+
+const fetchWithTimeout = async (
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+  timeoutMessage: string,
+) => {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(timeoutMessage);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+};
 
 const formatTime = (totalSeconds: number) => {
   const minutes = Math.floor(totalSeconds / 60);
@@ -69,6 +96,9 @@ export default function Home() {
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const mirrorSourceVideoRef = useRef<HTMLVideoElement | null>(null);
+  const mirrorVideoStreamRef = useRef<MediaStream | null>(null);
+  const mirrorAnimationRef = useRef<number | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recordedBlobRef = useRef<Blob | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -81,6 +111,9 @@ export default function Home() {
   );
   const [timeLeft, setTimeLeft] = useState(DURATION_OPTIONS[1].seconds);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [recordingFilename, setRecordingFilename] = useState(
+    "interview-practice-video",
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(true);
   const [selectedType, setSelectedType] = useState(DEFAULT_CATEGORY);
@@ -99,6 +132,7 @@ export default function Home() {
     useState<StepStatus>("idle");
   const [feedbackStatus, setFeedbackStatus] = useState<StepStatus>("idle");
 
+  /* eslint-disable react-hooks/set-state-in-effect -- These effects initialize browser capability, retry, and question state after hydration. */
   useEffect(() => {
     if (
       typeof window !== "undefined" &&
@@ -146,6 +180,7 @@ export default function Home() {
           return;
         }
         recordedBlobRef.current = stored;
+        setRecordingFilename(getRecordingFilename(stored));
         setVideoUrl((current) =>
           current ? current : URL.createObjectURL(stored),
         );
@@ -193,12 +228,7 @@ export default function Home() {
     setQuestions([...nextSet.questions]);
     setQuestionIndex(0);
   }, [customQuestion, selectedType]);
-
-  useEffect(() => {
-    if (!isRecording) {
-      setTimeLeft(selectedDuration);
-    }
-  }, [isRecording, selectedDuration]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (previewRef.current && streamRef.current) {
@@ -261,6 +291,21 @@ export default function Home() {
     ),
   );
 
+  const handleRecordedVideoMetadata = (
+    event: React.SyntheticEvent<HTMLVideoElement>,
+  ) => {
+    const video = event.currentTarget;
+    if (!Number.isFinite(video.duration) || video.duration <= 0) {
+      return;
+    }
+    setTimeLeft(
+      Math.max(0, Math.ceil(selectedDuration - video.duration)),
+    );
+    if (video.currentTime === 0) {
+      video.currentTime = Math.min(0.25, video.duration / 2);
+    }
+  };
+
   const clearTimer = () => {
     if (timerRef.current) {
       window.clearInterval(timerRef.current);
@@ -268,7 +313,67 @@ export default function Home() {
     }
   };
 
-  const cleanupStream = () => {
+  const cleanupMirrorCapture = useCallback(() => {
+    if (mirrorAnimationRef.current !== null) {
+      window.cancelAnimationFrame(mirrorAnimationRef.current);
+      mirrorAnimationRef.current = null;
+    }
+    if (mirrorVideoStreamRef.current) {
+      mirrorVideoStreamRef.current
+        .getVideoTracks()
+        .forEach((track) => track.stop());
+      mirrorVideoStreamRef.current = null;
+    }
+    if (mirrorSourceVideoRef.current) {
+      mirrorSourceVideoRef.current.pause();
+      mirrorSourceVideoRef.current.srcObject = null;
+      mirrorSourceVideoRef.current = null;
+    }
+  }, []);
+
+  const createMirroredRecordingStream = async (source: MediaStream) => {
+    cleanupMirrorCapture();
+    const sourceVideo = document.createElement("video");
+    sourceVideo.muted = true;
+    sourceVideo.playsInline = true;
+    sourceVideo.srcObject = source;
+    mirrorSourceVideoRef.current = sourceVideo;
+    await sourceVideo.play();
+
+    const videoSettings = source.getVideoTracks()[0]?.getSettings();
+    const width = videoSettings?.width ?? 640;
+    const height = videoSettings?.height ?? 360;
+    const frameRate = Math.min(videoSettings?.frameRate ?? 20, 24);
+    const canvas = document.createElement("canvas");
+    canvas.width = Number(width);
+    canvas.height = Number(height);
+    const context = canvas.getContext("2d");
+    if (!context || typeof canvas.captureStream !== "function") {
+      throw new Error("Mirrored recording is not supported in this browser.");
+    }
+
+    const drawFrame = () => {
+      if (sourceVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        context.save();
+        context.translate(canvas.width, 0);
+        context.scale(-1, 1);
+        context.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
+        context.restore();
+      }
+      mirrorAnimationRef.current = window.requestAnimationFrame(drawFrame);
+    };
+    drawFrame();
+
+    const mirroredVideoStream = canvas.captureStream(frameRate);
+    mirrorVideoStreamRef.current = mirroredVideoStream;
+    return new MediaStream([
+      ...mirroredVideoStream.getVideoTracks(),
+      ...source.getAudioTracks(),
+    ]);
+  };
+
+  const cleanupStream = useCallback(() => {
+    cleanupMirrorCapture();
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -277,12 +382,13 @@ export default function Home() {
       previewRef.current.srcObject = null;
     }
     setIsPreviewing(false);
-  };
+  }, [cleanupMirrorCapture]);
 
   const resetRecording = () => {
     clearTimer();
     chunksRef.current = [];
     recordedBlobRef.current = null;
+    setRecordingFilename("interview-practice-video");
     void clearRecording().catch(() => {});
     setIsRecording(false);
     setTimeLeft(selectedDuration);
@@ -387,6 +493,7 @@ export default function Home() {
       if (recording) {
         const restoredRecording = recording;
         recordedBlobRef.current = restoredRecording;
+        setRecordingFilename(getRecordingFilename(restoredRecording));
         setVideoUrl((current) =>
           current ? current : URL.createObjectURL(restoredRecording),
         );
@@ -414,10 +521,10 @@ export default function Home() {
     try {
       const file = recording;
       const transcribeForm = new FormData();
-      transcribeForm.append("file", file, "interview-practice.webm");
+      transcribeForm.append("file", file, getRecordingFilename(file));
       transcribeForm.append("question", currentQuestion);
       const feedbackForm = new FormData();
-      feedbackForm.append("file", file, "interview-practice.webm");
+      feedbackForm.append("file", file, getRecordingFilename(file));
 
       const parseResponse = async (response: Response) => {
         if (!response.ok) {
@@ -427,10 +534,15 @@ export default function Home() {
         return response.json();
       };
 
-      const feedbackPromise = fetch("/api/feedback", {
-        method: "POST",
-        body: feedbackForm,
-      })
+      const feedbackPromise = fetchWithTimeout(
+        "/api/feedback",
+        {
+          method: "POST",
+          body: feedbackForm,
+        },
+        FEEDBACK_REQUEST_TIMEOUT_MS,
+        "Confidence evaluation timed out after 2 minutes. Please try again.",
+      )
         .then(parseResponse)
         .then((data) => ({ ok: true as const, data }))
         .catch((err) => ({ ok: false as const, error: err }));
@@ -446,10 +558,15 @@ export default function Home() {
       } | null = null;
       let feedbackPayload: Record<string, unknown> | null = null;
       try {
-        transcribeResult = await fetch("/api/transcribe", {
-          method: "POST",
-          body: transcribeForm,
-        }).then(parseResponse);
+        transcribeResult = await fetchWithTimeout(
+          "/api/transcribe",
+          {
+            method: "POST",
+            body: transcribeForm,
+          },
+          TRANSCRIBE_REQUEST_TIMEOUT_MS,
+          "Transcription timed out after 90 seconds. Please try again.",
+        ).then(parseResponse);
         transcript =
           typeof transcribeResult?.transcript === "string"
             ? transcribeResult.transcript
@@ -645,6 +762,7 @@ export default function Home() {
 
     try {
       const stream = await ensureStream();
+      const recordingStream = await createMirroredRecordingStream(stream);
       const mimeType = pickRecorderMimeType();
       const recorderOptions: MediaRecorderOptions = {
         videoBitsPerSecond: VIDEO_BITS_PER_SECOND,
@@ -653,9 +771,10 @@ export default function Home() {
       if (mimeType) {
         recorderOptions.mimeType = mimeType;
       }
-      const recorder = new MediaRecorder(stream, recorderOptions);
+      const recorder = new MediaRecorder(recordingStream, recorderOptions);
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
+      const recordingStartedAt = Date.now();
 
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
@@ -668,19 +787,46 @@ export default function Home() {
         stopRecording();
       };
 
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         clearTimer();
         cleanupStream();
         setIsRecording(false);
-        const recordedBlob = new Blob(chunksRef.current, {
+        const recordingDurationMs = Math.max(
+          1,
+          Date.now() - recordingStartedAt,
+        );
+        const rawBlob = new Blob(chunksRef.current, {
           type: recorder.mimeType || "video/webm",
         });
-        if (recordedBlob.size > 0) {
-          recordedBlobRef.current = recordedBlob;
-          const nextUrl = URL.createObjectURL(recordedBlob);
-          setVideoUrl(nextUrl);
-          void saveRecording(recordedBlob).catch(() => {});
+        if (rawBlob.size === 0) {
+          return;
         }
+
+        let recordedBlob = rawBlob;
+        if (rawBlob.type.includes("webm")) {
+          try {
+            recordedBlob = await fixWebmDuration(
+              rawBlob,
+              recordingDurationMs,
+              { logger: false },
+            );
+          } catch {
+            setError("The recording could not be finalized. Please record again.");
+            return;
+          }
+        }
+
+        recordedBlobRef.current = recordedBlob;
+        setRecordingFilename(getRecordingFilename(recordedBlob));
+        const nextUrl = URL.createObjectURL(recordedBlob);
+        setTimeLeft(
+          Math.max(
+            0,
+            Math.ceil(selectedDuration - recordingDurationMs / 1000),
+          ),
+        );
+        setVideoUrl(nextUrl);
+        void saveRecording(recordedBlob).catch(() => {});
       };
 
       recorder.start();
@@ -724,7 +870,7 @@ export default function Home() {
         URL.revokeObjectURL(videoUrl);
       }
     };
-  }, [videoUrl]);
+  }, [cleanupStream, videoUrl]);
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f6efe6] text-[#1f1a17]">
@@ -746,7 +892,7 @@ export default function Home() {
             <div className="grid gap-3 text-sm text-black/60">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-[#1f1a17]" />
-                Camera + mic stay local in your browser.
+                Recording stays local until you request AI feedback.
               </div>
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-[#1f1a17]" />
@@ -788,9 +934,13 @@ export default function Home() {
                   </label>
                   <select
                     value={selectedDuration}
-                    onChange={(event) =>
-                      setSelectedDuration(Number(event.target.value))
-                    }
+                    onChange={(event) => {
+                      const nextDuration = Number(event.target.value);
+                      setSelectedDuration(nextDuration);
+                      if (!videoUrl) {
+                        setTimeLeft(nextDuration);
+                      }
+                    }}
                     disabled={isRecording}
                     className="mt-2 w-full rounded-2xl border border-black/15 bg-white/80 px-3 py-2 text-sm text-black/80 shadow-sm outline-none transition focus:border-black/40 disabled:cursor-not-allowed disabled:bg-black/5"
                   >
@@ -887,7 +1037,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="aspect-video w-full overflow-hidden rounded-2xl bg-[#111111] shadow-inner">
+                <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-[#111111] shadow-inner">
                   {isRecording || isPreviewing ? (
                     <video
                       ref={previewRef}
@@ -902,7 +1052,8 @@ export default function Home() {
                       key={videoUrl}
                       src={videoUrl}
                       className="h-full w-full object-cover"
-                      style={{ transform: "scaleX(-1)" }}
+                      onLoadedMetadata={handleRecordedVideoMetadata}
+                      preload="metadata"
                       controls
                       playsInline
                     />
@@ -949,44 +1100,51 @@ export default function Home() {
                     </p>
                   ) : null}
                   {showProgressSteps ? (
-                    <div className="space-y-3 rounded-2xl border border-black/5 bg-white/70 p-3">
-                      {[
-                        { label: "Transcribing", status: transcribeStatus },
-                        {
-                          label: "Technical check",
-                          status: technicalStatus,
-                        },
-                        {
-                          label: "Confidence eval",
-                          status: feedbackStatus,
-                        },
-                      ].map((step) => (
-                        <div key={step.label} className="space-y-1.5">
-                          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-black/45">
-                            <span>{step.label}</span>
-                            <span>{stepStatusLabel(step.status)}</span>
+                    <div className="rounded-2xl border border-black/5 bg-white/70 p-3">
+                      <div className="space-y-3">
+                        {[
+                          { label: "Transcribing", status: transcribeStatus },
+                          {
+                            label: "Technical check",
+                            status: technicalStatus,
+                          },
+                          {
+                            label: "Confidence eval",
+                            status: feedbackStatus,
+                          },
+                        ].map((step) => (
+                          <div key={step.label} className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-black/45">
+                              <span>{step.label}</span>
+                              <span>{stepStatusLabel(step.status)}</span>
+                            </div>
+                            <div className="h-2 w-full overflow-hidden rounded-full bg-black/10">
+                              {step.status === "loading" ? (
+                                <div className="loading-bar-runner h-full w-1/2 rounded-full bg-gradient-to-r from-[#f7b267] via-[#f29f4b] to-[#f7b267]" />
+                              ) : (
+                                <div
+                                  className={`h-full rounded-full ${
+                                    step.status === "success"
+                                      ? "bg-emerald-500"
+                                      : step.status === "error"
+                                        ? "bg-red-400"
+                                        : "bg-black/20"
+                                  }`}
+                                  style={{
+                                    width:
+                                      step.status === "idle" ? "25%" : "100%",
+                                  }}
+                                />
+                              )}
+                            </div>
                           </div>
-                          <div className="h-2 w-full overflow-hidden rounded-full bg-black/10">
-                            {step.status === "loading" ? (
-                              <div className="loading-bar-runner h-full w-1/2 rounded-full bg-gradient-to-r from-[#f7b267] via-[#f29f4b] to-[#f7b267]" />
-                            ) : (
-                              <div
-                                className={`h-full rounded-full ${
-                                  step.status === "success"
-                                    ? "bg-emerald-500"
-                                    : step.status === "error"
-                                      ? "bg-red-400"
-                                      : "bg-black/20"
-                                }`}
-                                style={{
-                                  width:
-                                    step.status === "idle" ? "25%" : "100%",
-                                }}
-                              />
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
+                      {feedbackStatus === "loading" ? (
+                        <p className="mt-3 text-xs text-black/45">
+                          Video analysis can take up to 2 minutes.
+                        </p>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -1011,31 +1169,32 @@ export default function Home() {
                       Turn off camera
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={startRecording}
-                    disabled={!isSupported || isRecording}
-                    className={`inline-flex cursor-pointer items-center justify-center rounded-full px-5 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                      videoUrl
-                        ? "border border-black/15 bg-white/80 text-black/70 hover:border-black/30 hover:text-black"
-                        : "bg-[#1f1a17] text-[#fef7f1] hover:bg-black/90"
-                    }`}
-                  >
-                    {videoUrl ? "Record again" : "Start recording"}
-                  </button>
                   {isRecording ? (
                     <button
                       type="button"
                       onClick={stopRecording}
-                      className="inline-flex items-center justify-center rounded-full border border-black/15 px-5 py-2.5 text-sm font-medium text-black/70 transition hover:border-black/30 hover:text-black"
+                      className="inline-flex cursor-pointer items-center justify-center rounded-full bg-[#1f1a17] px-5 py-2.5 text-sm font-medium text-[#fef7f1] transition hover:bg-black/90"
                     >
-                      Stop
+                      Stop recording
                     </button>
-                  ) : null}
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={startRecording}
+                      disabled={!isSupported}
+                      className={`inline-flex cursor-pointer items-center justify-center rounded-full px-5 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        videoUrl
+                          ? "border border-black/15 bg-white/80 text-black/70 hover:border-black/30 hover:text-black"
+                          : "bg-[#1f1a17] text-[#fef7f1] hover:bg-black/90"
+                      }`}
+                    >
+                      {videoUrl ? "Record again" : "Start recording"}
+                    </button>
+                  )}
                   {videoUrl ? (
                     <a
                       href={videoUrl}
-                      download="interview-practice.webm"
+                      download={recordingFilename}
                       className="inline-flex items-center justify-center rounded-full border border-black/15 px-5 py-2.5 text-sm font-medium text-black/70 transition hover:border-black/30 hover:text-black"
                     >
                       Download clip
